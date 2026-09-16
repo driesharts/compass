@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light;
   --bg: #f6f4ef;
   --surface: #ffffff;
   --text: #2b2924;
@@ -13,6 +14,38 @@
   --radius: 12px;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #1e1c18;
+    --surface: #28251f;
+    --text: #ece7dc;
+    --muted: #a89f8f;
+    --border: #4a4335;
+    --accent: #5b7a6d;
+    --accent-dark: #8fb3a1;
+    --intrinsic: #2ecc8f;
+    --intrinsic-text: #7fe0b8;
+    --intrinsic-bg: #1f3a2d;
+    --danger: #d9776a;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1e1c18;
+  --surface: #28251f;
+  --text: #ece7dc;
+  --muted: #a89f8f;
+  --border: #4a4335;
+  --accent: #5b7a6d;
+  --accent-dark: #8fb3a1;
+  --intrinsic: #2ecc8f;
+  --intrinsic-text: #7fe0b8;
+  --intrinsic-bg: #1f3a2d;
+  --danger: #d9776a;
+}
+
 * { box-sizing: border-box; }
 
 body {
@@ -21,6 +54,7 @@ body {
   background: var(--bg);
   color: var(--text);
   line-height: 1.5;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 #app-shell { max-width: 720px; margin: 0 auto; padding: 0 16px 64px; }
@@ -80,7 +114,7 @@ input[type="text"], input[type="date"], input[type="number"], textarea, select {
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: #fff;
+  background: var(--surface);
   font-size: 14px;
   font-family: inherit;
   color: var(--text);
@@ -101,7 +135,7 @@ textarea { min-height: 70px; resize: vertical; }
 .btn-primary:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
 .btn-secondary { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
 .btn-secondary:hover { border-color: var(--accent); }
-.btn-danger { background: #fff; color: var(--danger); border: 1px solid var(--danger); }
+.btn-danger { background: var(--surface); color: var(--danger); border: 1px solid var(--danger); }
 .btn-danger:hover { background: var(--danger); color: #fff; }
 .btn-small { background: var(--bg); border: 1px solid var(--border); padding: 6px 12px; font-size: 13px; border-radius: 999px; }
 .btn-small:hover { border-color: var(--accent); color: var(--accent-dark); }
@@ -152,7 +186,7 @@ textarea { min-height: 70px; resize: vertical; }
 .log-toggle {
   width: 34px; height: 34px; border-radius: 50%;
   border: 2px solid var(--accent);
-  background: #fff;
+  background: var(--surface);
   color: var(--accent);
   font-size: 16px;
   cursor: pointer;

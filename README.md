@@ -25,6 +25,7 @@ Instead, the **Motive** prompt category asks about a specific active goal using 
 ## Design notes
 
 - Everything is saved to `localStorage` — no account, no server, fully private.
+- Appearance (Settings) supports System / Light / Dark, with the dark palette using the same warm, muted tones as light mode rather than stark black/white.
 - No points, coins, or badges on purpose — the research this app is built on (self-determination theory) suggests external rewards can crowd out intrinsic motivation for things like language learning or exercise. Feedback (the consistency view) does the motivational work instead.
 - Export strips internal UI state before download; import asks for confirmation before overwriting local data.
 

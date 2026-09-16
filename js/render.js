@@ -88,6 +88,20 @@ function barRow(label, value, max, colorVar) {
   `;
 }
 
+function applyTheme(state) {
+  const root = document.documentElement;
+  if (state.theme === 'light' || state.theme === 'dark') {
+    root.setAttribute('data-theme', state.theme);
+  } else {
+    root.removeAttribute('data-theme');
+  }
+  const isDark =
+    state.theme === 'dark' ||
+    (state.theme !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', isDark ? '#1e1c18' : '#f6f4ef');
+}
+
 // ---------- Views ----------
 
 function renderApp(state) {
@@ -604,6 +618,27 @@ function renderStats(state) {
 function renderSettings(state) {
   const wrap = el(`<div class="view"></div>`);
   wrap.appendChild(el(`<h1>Settings</h1>`));
+
+  const theme = state.theme || 'system';
+  const themeCard = el(`
+    <div class="card">
+      <h2>Appearance</h2>
+      <div class="filter-chips">
+        <button type="button" class="filter-chip ${theme === 'system' ? 'active' : ''}" data-theme-choice="system">System</button>
+        <button type="button" class="filter-chip ${theme === 'light' ? 'active' : ''}" data-theme-choice="light">Light</button>
+        <button type="button" class="filter-chip ${theme === 'dark' ? 'active' : ''}" data-theme-choice="dark">Dark</button>
+      </div>
+    </div>
+  `);
+  themeCard.querySelectorAll('[data-theme-choice]').forEach((btn) => {
+    btn.onclick = () => {
+      state.theme = btn.dataset.themeChoice;
+      saveState(state);
+      applyTheme(state);
+      renderApp(state);
+    };
+  });
+  wrap.appendChild(themeCard);
 
   const card = el(`
     <div class="card">

@@ -124,6 +124,7 @@ function defaultState() {
   return {
     onboarded: false,
     createdAt: todayISO(),
+    theme: 'system',
     values: [],
     goals: [],
     habits: [],
