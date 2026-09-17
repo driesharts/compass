@@ -163,13 +163,9 @@ function habitsForGoal(state, goalId) {
   return state.habits.filter((h) => h.goalId === goalId);
 }
 
-function directHabitsForValue(state, valueId) {
-  return state.habits.filter((h) => !h.goalId && h.valueId === valueId);
-}
-
 function habitsForValue(state, valueId) {
   const goalIds = new Set(goalsForValue(state, valueId).map((g) => g.id));
-  return state.habits.filter((h) => (h.goalId && goalIds.has(h.goalId)) || (!h.goalId && h.valueId === valueId));
+  return state.habits.filter((h) => goalIds.has(h.goalId));
 }
 
 function goalsForValue(state, valueId) {
@@ -180,21 +176,14 @@ function todosForGoal(state, goalId) {
   return state.todos.filter((t) => t.goalId === goalId);
 }
 
-function directTodosForValue(state, valueId) {
-  return state.todos.filter((t) => !t.goalId && t.valueId === valueId);
-}
-
 function valueHasActiveHabit(state, valueId) {
   return habitsForValue(state, valueId).some((h) => h.status !== 'completed');
 }
 
 function ownerValueId(state, item) {
-  if (item.valueId) return item.valueId;
-  if (item.goalId) {
-    const goal = state.goals.find((g) => g.id === item.goalId);
-    return goal ? goal.valueId : null;
-  }
-  return null;
+  if (!item.goalId) return null;
+  const goal = state.goals.find((g) => g.id === item.goalId);
+  return goal ? goal.valueId : null;
 }
 
 function habitTarget(habit, windowSize) {
@@ -218,13 +207,14 @@ function deleteTodo(state, todoId) {
 function deleteGoal(state, goalId) {
   state.habits.filter((h) => h.goalId === goalId).forEach((h) => deleteHabit(state, h.id));
   state.todos.filter((t) => t.goalId === goalId).forEach((t) => deleteTodo(state, t.id));
+  state.journal.forEach((j) => {
+    if (j.goalId === goalId) j.goalId = null;
+  });
   state.goals = state.goals.filter((g) => g.id !== goalId);
 }
 
 function deleteValue(state, valueId) {
   state.goals.filter((g) => g.valueId === valueId).forEach((g) => deleteGoal(state, g.id));
-  directHabitsForValue(state, valueId).forEach((h) => deleteHabit(state, h.id));
-  directTodosForValue(state, valueId).forEach((t) => deleteTodo(state, t.id));
   state.values = state.values.filter((v) => v.id !== valueId);
 }
 
