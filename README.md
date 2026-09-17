@@ -8,7 +8,7 @@ No build step, no install. Open `index.html` in a browser, or run it via the Cla
 
 ## How it works
 
-- **Values** — a handful of directions that matter to you (growth, connection, health...). Rarely change. Editable and deletable (deleting cascades to its goals, habits, and to-dos). On the Values & Goals page, each value collapses to its name and a count of goals/habits/to-dos by default — click to expand it in place and see the full detail, so the page stays scannable as you add more.
+- **Values** — a handful of directions that matter to you (growth, connection, health...). Rarely change. Editable and deletable (deleting cascades to its goals, habits, and to-dos). On the Values & Goals page, each value collapses to its name and a count of goals/habits/to-dos by default — click to expand it in place and see the full detail, so the page stays scannable as you add more. An "Expand all" / "Collapse all" toggle (once you have more than one value) switches every section at once.
 - **Goals** — concrete, dated milestones under a value, e.g. "Watch a Netflix series in Spanish without subtitles by March 2027." Each goal has a title, a *why*, and a target date (with a "days left" / "days past" indicator). Editable, deletable, and markable as achieved (moves it to History instead of just sitting there).
 - **Habits** — the action under a goal, defined as a trigger ("if it's 8pm, then I do 20 min of Spanish"), not just a name. A habit can also attach directly to a value with no goal in between, for ongoing practices that don't have a milestone shape (e.g. "stretch daily" under Health). Frequency is daily, a target number of times per week, or per month — a 2x/week habit is measured against "2 this week," not "7," so it doesn't read as failing on the days it's not supposed to happen. Editable, deletable, and markable as completed (moves it to History, preserving its log history instead of erasing it).
 - **To-dos** — one-off action items under a goal (e.g. "sign up for the race"), distinct from recurring habits. Check one off and it moves to History; delete it if it's no longer relevant.
@@ -30,6 +30,8 @@ Instead, the **Motive** prompt category asks about a specific active goal using 
 - Appearance (Settings) supports System / Light / Dark, with the dark palette using the same warm, muted tones as light mode rather than stark black/white.
 - No points, coins, or badges on purpose — the research this app is built on (self-determination theory) suggests external rewards can crowd out intrinsic motivation for things like language learning or exercise. Feedback (the consistency view) does the motivational work instead.
 - Export strips internal UI state before download; import asks for confirmation before overwriting local data.
+- Below ~640px wide, navigation moves to a fixed bottom tab bar (phone-style) instead of the top row, since the app is meant to be added to an iOS home screen and used like a native app.
+- Logging a habit, completing a to-do or habit, achieving a goal, or deleting something surfaces a brief toast confirming it happened.
 
 ## Deferred to a later version
 

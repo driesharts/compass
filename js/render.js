@@ -315,10 +315,13 @@ function renderToday(state) {
     row.querySelector('.log-toggle').onclick = () => {
       if (isLoggedOn(state, h.id, date)) {
         state.logs = state.logs.filter((l) => !(l.habitId === h.id && l.date === date));
+        saveState(state);
+        showToast('Unlogged');
       } else {
         state.logs.push({ id: uid(), habitId: h.id, date });
+        saveState(state);
+        showToast(`Logged "${h.name}"`);
       }
-      saveState(state);
       renderApp(state);
     };
     return row;
@@ -341,6 +344,7 @@ function renderToday(state) {
       t.status = 'done';
       t.completedAt = todayISO();
       saveState(state);
+      showToast(`"${t.title}" marked done`);
       renderApp(state);
     };
     return row;
@@ -435,6 +439,25 @@ function renderValuesGoals(state) {
     return wrap;
   }
 
+  if (visibleValues.length > 1) {
+    const allExpanded = visibleValues.every((v) => state._expandedValues && state._expandedValues[v.id]);
+    const toolbar = el(`
+      <div class="values-toolbar">
+        <button class="btn btn-tiny" id="toggle-all-values">${allExpanded ? 'Collapse all' : 'Expand all'}</button>
+      </div>
+    `);
+    toolbar.querySelector('#toggle-all-values').onclick = () => {
+      state._expandedValues = state._expandedValues || {};
+      visibleValues.forEach((v) => {
+        if (allExpanded) delete state._expandedValues[v.id];
+        else state._expandedValues[v.id] = true;
+      });
+      saveState(state);
+      renderApp(state);
+    };
+    wrap.appendChild(toolbar);
+  }
+
   function renderHabitRow(habit, parent) {
     const habitRowEl = el(`
       <div class="habit-sub-row">
@@ -469,12 +492,14 @@ function renderValuesGoals(state) {
       todo.status = 'done';
       todo.completedAt = todayISO();
       saveState(state);
+      showToast(`"${todo.title}" marked done`);
       renderApp(state);
     };
     todoRowEl.querySelector('[data-action="delete-todo"]').onclick = () => {
       openConfirmModal('Delete this to-do? This cannot be undone.', 'Delete', () => {
         deleteTodo(state, todo.id);
         saveState(state);
+        showToast('To-do deleted');
         renderApp(state);
       });
     };
@@ -837,6 +862,7 @@ function renderHistory(state) {
             openConfirmModal('Delete this habit permanently?', 'Delete', () => {
               deleteHabit(state, h.id);
               saveState(state);
+              showToast('Habit deleted permanently');
               renderApp(state);
             });
           })
@@ -848,6 +874,7 @@ function renderHistory(state) {
             openConfirmModal('Delete this to-do permanently?', 'Delete', () => {
               deleteTodo(state, t.id);
               saveState(state);
+              showToast('To-do deleted permanently');
               renderApp(state);
             });
           })
@@ -865,6 +892,7 @@ function renderHistory(state) {
             openConfirmModal('Delete this habit permanently?', 'Delete', () => {
               deleteHabit(state, h.id);
               saveState(state);
+              showToast('Habit deleted permanently');
               renderApp(state);
             });
           })
@@ -962,6 +990,27 @@ function renderSettings(state) {
 
   wrap.appendChild(card);
   return wrap;
+}
+
+// ---------- Toasts ----------
+
+let toastHideTimer = null;
+let toastClearTimer = null;
+
+function showToast(message) {
+  const root = document.getElementById('toast-root');
+  if (!root) return;
+  clearTimeout(toastHideTimer);
+  clearTimeout(toastClearTimer);
+  root.innerHTML = `<div class="toast">${escapeHtml(message)}</div>`;
+  const toastEl = root.querySelector('.toast');
+  requestAnimationFrame(() => toastEl.classList.add('visible'));
+  toastHideTimer = setTimeout(() => {
+    toastEl.classList.remove('visible');
+    toastClearTimer = setTimeout(() => {
+      root.innerHTML = '';
+    }, 250);
+  }, 2200);
 }
 
 // ---------- Modals ----------
@@ -1074,6 +1123,7 @@ function openGoalModal(state, valueId, existingGoal) {
         existingGoal.status = 'achieved';
         saveState(state);
         closeModal();
+        showToast(`"${existingGoal.title}" achieved`);
         renderApp(state);
       };
     }
@@ -1081,6 +1131,7 @@ function openGoalModal(state, valueId, existingGoal) {
       openConfirmModal('Delete this goal? This cannot be undone — its habits will be deleted too.', 'Delete', () => {
         deleteGoal(state, existingGoal.id);
         saveState(state);
+        showToast('Goal deleted');
         renderApp(state);
       });
     };
@@ -1174,6 +1225,7 @@ function openHabitModal(state, parent, existingHabit) {
         existingHabit.completedAt = todayISO();
         saveState(state);
         closeModal();
+        showToast(`"${existingHabit.name}" completed`);
         renderApp(state);
       };
     }
@@ -1181,6 +1233,7 @@ function openHabitModal(state, parent, existingHabit) {
       openConfirmModal('Delete this habit? This cannot be undone — its log history will be deleted too.', 'Delete', () => {
         deleteHabit(state, existingHabit.id);
         saveState(state);
+        showToast('Habit deleted');
         renderApp(state);
       });
     };
@@ -1245,6 +1298,7 @@ function openValueModal(state, value) {
     openConfirmModal('Delete this value? This cannot be undone — its goals and habits will be deleted too.', 'Delete', () => {
       deleteValue(state, value.id);
       saveState(state);
+      showToast('Value deleted');
       renderApp(state);
     });
   };
