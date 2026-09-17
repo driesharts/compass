@@ -200,32 +200,54 @@ function renderToday(state) {
   const wrap = el(`<div class="view"></div>`);
   wrap.appendChild(el(`<h1>Today</h1>`));
 
-  function renderPlanCard(planDate, label, id) {
-    const plan = dayPlanForDate(state, planDate);
-    const card = el(`
-      <div class="card">
-        <label class="prompt-label">${escapeHtml(label)}</label>
-        <textarea id="${id}" placeholder="Optional — jot down a plan, whenever you write it">${escapeHtml(plan ? plan.text : '')}</textarea>
-      </div>
-    `);
-    const ta = card.querySelector(`#${id}`);
-    ta.addEventListener('blur', () => {
-      const text = ta.value.trim();
-      let p = dayPlanForDate(state, planDate);
-      if (!text) {
-        if (p) state.dayPlans = state.dayPlans.filter((x) => x !== p);
-      } else if (p) {
-        p.text = text;
-      } else {
-        state.dayPlans.push({ id: uid(), date: planDate, text });
+  const todaysPlan = dayPlanForDate(state, date);
+  const todayPlanCard = el(`
+    <div class="card">
+      <label class="prompt-label">What did you want to get done today?</label>
+      ${
+        todaysPlan
+          ? `
+        <div class="plan-display">
+          <button class="log-toggle ${todaysPlan.completed ? 'logged' : ''}" title="Mark as done">${todaysPlan.completed ? '✓' : ''}</button>
+          <div class="plan-text ${todaysPlan.completed ? 'plan-text--done' : ''}">${escapeHtml(todaysPlan.text)}</div>
+        </div>
+      `
+          : `<p class="muted small">You didn't write a plan for today yesterday.</p>`
       }
+    </div>
+  `);
+  if (todaysPlan) {
+    todayPlanCard.querySelector('.log-toggle').onclick = () => {
+      todaysPlan.completed = !todaysPlan.completed;
       saveState(state);
-    });
-    return card;
+      showToast(todaysPlan.completed ? 'Nice, stuck to your plan' : 'Marked not done');
+      renderApp(state);
+    };
   }
+  wrap.appendChild(todayPlanCard);
 
-  wrap.appendChild(renderPlanCard(date, 'What do you want to get done today?', 'today-plan'));
-  wrap.appendChild(renderPlanCard(tomorrowISO(), 'What do you want to get done tomorrow?', 'tomorrow-plan'));
+  const tomorrowDate = tomorrowISO();
+  const tomorrowsPlan = dayPlanForDate(state, tomorrowDate);
+  const tomorrowPlanCard = el(`
+    <div class="card">
+      <label class="prompt-label">What do you want to get done tomorrow?</label>
+      <textarea id="tomorrow-plan" placeholder="Optional — jot down a plan, whenever you write it">${escapeHtml(tomorrowsPlan ? tomorrowsPlan.text : '')}</textarea>
+    </div>
+  `);
+  const tomorrowTa = tomorrowPlanCard.querySelector('#tomorrow-plan');
+  tomorrowTa.addEventListener('blur', () => {
+    const text = tomorrowTa.value.trim();
+    let p = dayPlanForDate(state, tomorrowDate);
+    if (!text) {
+      if (p) state.dayPlans = state.dayPlans.filter((x) => x !== p);
+    } else if (p) {
+      p.text = text;
+    } else {
+      state.dayPlans.push({ id: uid(), date: tomorrowDate, text, completed: false });
+    }
+    saveState(state);
+  });
+  wrap.appendChild(tomorrowPlanCard);
 
   const entry = journalEntryForDate(state, date);
   const { text: promptText, category: promptCategory } = promptForDate(state, date);
@@ -588,52 +610,49 @@ function renderValuesGoals(state) {
   return wrap;
 }
 
-const JOURNAL_CATEGORIES = [
-  { id: 'all', label: 'All' },
+const JOURNAL_PROMPT_CATEGORIES = [
   { id: 'retro', label: 'Retrospective' },
   { id: 'future', label: 'Future-self' },
   { id: 'socratic', label: 'Socratic' },
   { id: 'values', label: 'Values' },
   { id: 'motive', label: 'Motive' },
   { id: 'aware', label: 'From your data' },
-  { id: 'free', label: 'Free-form' },
 ];
 
-function activeGoalOptionsHtml(state, selectedId) {
-  return state.values
-    .flatMap((v) =>
-      goalsForValue(state, v.id)
-        .filter((g) => g.status !== 'achieved')
-        .map(
-          (g) =>
-            `<option value="${g.id}" ${g.id === selectedId ? 'selected' : ''}>${escapeHtml(v.name)} → ${escapeHtml(g.title)}</option>`
-        )
-    )
-    .join('');
+function activeGoalsList(state) {
+  return state.values.flatMap((v) => goalsForValue(state, v.id).filter((g) => g.status !== 'achieved'));
 }
 
 function renderJournal(state) {
   const wrap = el(`<div class="view"></div>`);
   wrap.appendChild(el(`<h1>Journal</h1>`));
 
-  const goalOptions = activeGoalOptionsHtml(state, null);
+  const activeGoals = activeGoalsList(state);
+  let composerGoalId = null;
+
   const addCard = el(`
     <div class="card">
       <textarea id="new-entry-text" placeholder="Write freely..."></textarea>
-      <label class="small muted" style="margin-top:10px;">Related goal <span class="muted">(optional)</span></label>
-      <select id="new-entry-goal">
-        <option value="">None</option>
-        ${goalOptions}
-      </select>
+      <label class="small muted" style="margin-top:10px;">What's this about?</label>
+      <div class="filter-chips">
+        <button type="button" class="filter-chip active" data-goal="">Freeform</button>
+        ${activeGoals.map((g) => `<button type="button" class="filter-chip" data-goal="${g.id}">${escapeHtml(g.title)}</button>`).join('')}
+      </div>
       <button class="btn btn-primary" id="add-entry-btn" style="margin-top:12px;">Add entry</button>
     </div>
   `);
+  addCard.querySelectorAll('.filter-chip').forEach((btn) => {
+    btn.onclick = () => {
+      composerGoalId = btn.dataset.goal || null;
+      addCard.querySelectorAll('.filter-chip').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+    };
+  });
   addCard.querySelector('#add-entry-btn').onclick = () => {
     const ta = addCard.querySelector('#new-entry-text');
     const text = ta.value.trim();
     if (!text) return;
-    const goalId = addCard.querySelector('#new-entry-goal').value || null;
-    state.journal.push({ id: uid(), date: todayISO(), type: 'free', category: 'free', text, goalId });
+    state.journal.push({ id: uid(), date: todayISO(), type: 'free', category: 'free', text, goalId: composerGoalId });
     saveState(state);
     showToast('Journal entry added');
     renderApp(state);
@@ -645,45 +664,50 @@ function renderJournal(state) {
     return wrap;
   }
 
-  const filter = { category: 'all', search: '', goalId: null };
+  const filter = { mode: 'all', value: null, search: '' };
   const entryCategory = (e) => e.category || (e.type === 'free' ? 'free' : 'retro');
+  const matchesFilter = (e) => {
+    if (filter.mode === 'category') return entryCategory(e) === filter.value;
+    if (filter.mode === 'goal') return e.goalId === filter.value;
+    if (filter.mode === 'freeform') return entryCategory(e) === 'free' && !e.goalId;
+    return true;
+  };
 
   const controls = el(`
     <div class="card journal-controls">
       <input type="text" id="journal-search" placeholder="Search entries..." />
+      <p class="muted small journal-filter-heading">Prompts</p>
       <div class="filter-chips">
-        ${JOURNAL_CATEGORIES.map((c) => `<button type="button" class="filter-chip ${c.id === 'all' ? 'active' : ''}" data-cat="${c.id}">${escapeHtml(c.label)}</button>`).join('')}
+        <button type="button" class="filter-chip active" data-mode="all">All</button>
+        ${JOURNAL_PROMPT_CATEGORIES.map((c) => `<button type="button" class="filter-chip" data-mode="category" data-value="${c.id}">${escapeHtml(c.label)}</button>`).join('')}
+      </div>
+      <p class="muted small journal-filter-heading">Goals</p>
+      <div class="filter-chips">
+        <button type="button" class="filter-chip" data-mode="freeform">Freeform</button>
+        ${activeGoals.map((g) => `<button type="button" class="filter-chip" data-mode="goal" data-value="${g.id}">${escapeHtml(g.title)}</button>`).join('')}
       </div>
     </div>
   `);
   wrap.appendChild(controls);
 
-  const goalFilterBar = el(`<div class="journal-goal-filter" style="display:none;"></div>`);
-  wrap.appendChild(goalFilterBar);
-
   const listContainer = el(`<div class="journal-list"></div>`);
   wrap.appendChild(listContainer);
+
+  function setFilter(mode, value) {
+    filter.mode = mode;
+    filter.value = value || null;
+    controls.querySelectorAll('.filter-chip').forEach((b) => {
+      b.classList.toggle('active', b.dataset.mode === mode && (b.dataset.value || null) === (value || null));
+    });
+    update();
+  }
 
   function update() {
     const searchLower = filter.search.trim().toLowerCase();
     const entries = [...state.journal]
-      .filter((e) => filter.category === 'all' || entryCategory(e) === filter.category)
-      .filter((e) => !filter.goalId || e.goalId === filter.goalId)
+      .filter(matchesFilter)
       .filter((e) => !searchLower || (e.text || '').toLowerCase().includes(searchLower) || (e.prompt || '').toLowerCase().includes(searchLower))
       .sort((a, b) => (a.date < b.date ? 1 : -1));
-
-    if (filter.goalId) {
-      const g = state.goals.find((x) => x.id === filter.goalId);
-      goalFilterBar.style.display = '';
-      goalFilterBar.innerHTML = `<span class="muted small">Showing notes for <strong>${escapeHtml(g ? g.title : 'a deleted goal')}</strong></span><button type="button" class="btn btn-tiny" id="clear-goal-filter">Clear</button>`;
-      goalFilterBar.querySelector('#clear-goal-filter').onclick = () => {
-        filter.goalId = null;
-        update();
-      };
-    } else {
-      goalFilterBar.style.display = 'none';
-      goalFilterBar.innerHTML = '';
-    }
 
     listContainer.innerHTML = '';
     if (entries.length === 0) {
@@ -709,10 +733,7 @@ function renderJournal(state) {
         </div>
       `);
       if (goal) {
-        entryEl.querySelector('.journal-goal-tag').onclick = () => {
-          filter.goalId = goal.id;
-          update();
-        };
+        entryEl.querySelector('.journal-goal-tag').onclick = () => setFilter('goal', goal.id);
       }
       listContainer.appendChild(entryEl);
     });
@@ -723,12 +744,7 @@ function renderJournal(state) {
     update();
   });
   controls.querySelectorAll('.filter-chip').forEach((btn) => {
-    btn.onclick = () => {
-      filter.category = btn.dataset.cat;
-      controls.querySelectorAll('.filter-chip').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      update();
-    };
+    btn.onclick = () => setFilter(btn.dataset.mode, btn.dataset.value);
   });
 
   update();
@@ -739,7 +755,7 @@ function renderStats(state) {
   const wrap = el(`<div class="view"></div>`);
   wrap.appendChild(el(`<h1>Statistics</h1>`));
 
-  if (state.values.length === 0 && state.habits.length === 0) {
+  if (state.values.length === 0 && state.habits.length === 0 && state.dayPlans.length === 0) {
     wrap.appendChild(el(`<div class="empty-state"><p>Nothing to show yet — add a value, goal, and habit first.</p></div>`));
     return wrap;
   }
@@ -786,6 +802,38 @@ function renderStats(state) {
         );
       });
       card.appendChild(list);
+    });
+    wrap.appendChild(card);
+  }
+
+  if (state.dayPlans.length > 0) {
+    const sortedPlans = [...state.dayPlans].sort((a, b) => (a.date < b.date ? -1 : 1));
+    const monthGroups = new Map();
+    sortedPlans.forEach((p) => {
+      const month = monthLabel(p.date);
+      if (!monthGroups.has(month)) monthGroups.set(month, []);
+      monthGroups.get(month).push(p);
+    });
+    const card = el(`
+      <div class="card">
+        <h2>Plan follow-through</h2>
+        <p class="muted small">Whether you did what you told yourself you would, day by day.</p>
+      </div>
+    `);
+    monthGroups.forEach((plans, month) => {
+      const doneCount = plans.filter((p) => p.completed).length;
+      card.appendChild(el(`<p class="stat-group-heading">${escapeHtml(month)}</p>`));
+      const dotsHtml = plans
+        .map((p) => `<span class="dot ${p.completed ? 'dot--on' : ''}" title="${escapeHtml(p.date)}: ${p.completed ? 'done' : 'not done'}"></span>`)
+        .join('');
+      card.appendChild(
+        el(`
+        <div class="consistency">
+          <div class="dots dots--wrap">${dotsHtml}</div>
+          <span class="consistency-label">${doneCount}/${plans.length} days followed</span>
+        </div>
+      `)
+      );
     });
     wrap.appendChild(card);
   }
