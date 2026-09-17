@@ -131,6 +131,7 @@ function defaultState() {
     todos: [],
     logs: [],
     journal: [],
+    dayPlans: [],
   };
 }
 
@@ -243,6 +244,10 @@ function consistency(state, habitId, dateISO, windowSize) {
 
 function journalEntryForDate(state, dateISO) {
   return state.journal.find((j) => j.date === dateISO && j.type === 'daily');
+}
+
+function dayPlanForDate(state, dateISO) {
+  return state.dayPlans.find((p) => p.date === dateISO);
 }
 
 // ---- Stats helpers ----

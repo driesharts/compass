@@ -228,6 +228,28 @@ function renderToday(state) {
   const wrap = el(`<div class="view"></div>`);
   wrap.appendChild(el(`<h1>Today</h1>`));
 
+  const plan = dayPlanForDate(state, date);
+  const planCard = el(`
+    <div class="card">
+      <label class="prompt-label">What do you want to get done today?</label>
+      <textarea id="today-plan" placeholder="Optional — jot down a plan, whenever you write it">${escapeHtml(plan ? plan.text : '')}</textarea>
+    </div>
+  `);
+  const planTa = planCard.querySelector('#today-plan');
+  planTa.addEventListener('blur', () => {
+    const text = planTa.value.trim();
+    let p = dayPlanForDate(state, date);
+    if (!text) {
+      if (p) state.dayPlans = state.dayPlans.filter((x) => x !== p);
+    } else if (p) {
+      p.text = text;
+    } else {
+      state.dayPlans.push({ id: uid(), date, text });
+    }
+    saveState(state);
+  });
+  wrap.appendChild(planCard);
+
   const entry = journalEntryForDate(state, date);
   const { text: promptText, category: promptCategory } = promptForDate(state, date);
   const promptCard = el(`
