@@ -579,6 +579,7 @@ function renderGoalDetail(state, goalId) {
     <div class="goal-detail-header">
       <h1>${escapeHtml(goal.title)} ${achieved ? '<span class="chip chip--achieved">✓ Achieved</span>' : ''}</h1>
       ${targetDateInfo(goal)}
+      ${goal.why ? `<p class="goal-why">${escapeHtml(goal.why)}</p>` : ''}
     </div>
   `)
   );
@@ -651,12 +652,16 @@ function renderGoalDetail(state, goalId) {
   };
   wrap.appendChild(composerCard);
 
+  const RECENT_JOURNAL_COUNT = 3;
   const goalEntries = state.journal.filter((j) => j.goalId === goal.id).sort((a, b) => (a.date < b.date ? 1 : -1));
+  const journalExpanded = !!(state._expandedGoalJournals && state._expandedGoalJournals[goal.id]);
+  const visibleEntries = journalExpanded ? goalEntries : goalEntries.slice(0, RECENT_JOURNAL_COUNT);
+
   if (goalEntries.length === 0) {
     wrap.appendChild(el(`<p class="muted small">No journal entries for this goal yet.</p>`));
   } else {
     const entryList = el(`<div class="journal-list"></div>`);
-    goalEntries.forEach((e) => {
+    visibleEntries.forEach((e) => {
       const entryEl = el(`
         <div class="card journal-entry">
           <div class="journal-entry-header">
@@ -671,20 +676,21 @@ function renderGoalDetail(state, goalId) {
       entryList.appendChild(entryEl);
     });
     wrap.appendChild(entryList);
-  }
 
-  wrap.appendChild(el(`<h2 class="section-heading">Why this matters</h2>`));
-  const whyCard = el(`
-    <div class="card">
-      <textarea id="goal-why" placeholder="Why do you want to achieve this?">${escapeHtml(goal.why || '')}</textarea>
-    </div>
-  `);
-  const whyTa = whyCard.querySelector('#goal-why');
-  whyTa.addEventListener('blur', () => {
-    goal.why = whyTa.value.trim();
-    saveState(state);
-  });
-  wrap.appendChild(whyCard);
+    if (goalEntries.length > RECENT_JOURNAL_COUNT) {
+      const toggleBtn = el(
+        `<button class="btn btn-tiny" style="margin-top:4px;">${journalExpanded ? 'Show recent only' : `Show all (${goalEntries.length})`}</button>`
+      );
+      toggleBtn.onclick = () => {
+        state._expandedGoalJournals = state._expandedGoalJournals || {};
+        if (journalExpanded) delete state._expandedGoalJournals[goal.id];
+        else state._expandedGoalJournals[goal.id] = true;
+        saveState(state);
+        renderApp(state);
+      };
+      wrap.appendChild(toggleBtn);
+    }
+  }
 
   return wrap;
 }
@@ -1242,6 +1248,8 @@ function openGoalModal(state, valueId, existingGoal) {
       <input type="date" id="g-date" value="${isEdit ? escapeHtml(existingGoal.targetDate || '') : ''}" />
       <label>Notes <span class="muted small">(anything else worth keeping track of)</span></label>
       <textarea id="g-notes" placeholder="Optional">${isEdit ? escapeHtml(existingGoal.notes || '') : ''}</textarea>
+      <label>Why do you want to achieve this?</label>
+      <textarea id="g-why" placeholder="Write a sentence or two">${isEdit ? escapeHtml(existingGoal.why || '') : ''}</textarea>
       <div class="modal-actions modal-actions--split">
         <div class="modal-actions-left">
           ${isEdit ? '<button class="btn btn-danger" id="g-delete">Delete</button>' : ''}
@@ -1260,14 +1268,15 @@ function openGoalModal(state, valueId, existingGoal) {
     if (!title) return;
     const targetDate = content.querySelector('#g-date').value;
     const notes = content.querySelector('#g-notes').value.trim();
+    const why = content.querySelector('#g-why').value.trim();
     if (isEdit) {
-      Object.assign(existingGoal, { title, targetDate, notes });
+      Object.assign(existingGoal, { title, targetDate, notes, why });
     } else {
       state.goals.push({
         id: uid(),
         valueId,
         title,
-        why: '',
+        why,
         targetDate,
         notes,
         status: 'active',
