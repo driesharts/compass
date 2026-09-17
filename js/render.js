@@ -315,7 +315,7 @@ function renderToday(state) {
           <div class="plan-text ${todaysPlan.completed ? 'plan-text--done' : ''}">${escapeHtml(todaysPlan.text)}</div>
         </div>
       `
-          : `<p class="muted small">You didn't write a plan for today yesterday.</p>`
+          : `<p class="muted small">You didn't write a plan for today.</p>`
       }
     </div>
   `);

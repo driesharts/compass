@@ -33,6 +33,7 @@ Instead, the **Motive** prompt category asks about a specific active goal using 
 - Export strips internal UI state before download; import asks for confirmation before overwriting local data.
 - Below ~640px wide, navigation moves to a fixed bottom tab bar (phone-style, sized for comfortable tapping) instead of the top row, since the app is meant to be added to an iOS home screen and used like a native app.
 - Logging a habit, completing a to-do or habit, achieving a goal, or deleting something surfaces a brief toast confirming it happened.
+- Pinch/double-tap zoom is disabled and inputs use a 16px font so tapping into a field doesn't trigger iOS's auto-zoom — this is meant to feel like a fixed-layout app, not a zoomable web page. Focus rings and the mobile tap-highlight flash use the app's green accent instead of the browser default blue.
 
 ## Deferred to a later version
 
