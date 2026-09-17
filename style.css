@@ -128,7 +128,7 @@ header#app-header {
     right: 0;
     bottom: 0;
     margin: 0;
-    padding: 10px 6px calc(10px + env(safe-area-inset-bottom));
+    padding: 16px 6px calc(16px + env(safe-area-inset-bottom));
     background: var(--surface);
     border-top: 1px solid var(--border);
     justify-content: center;
@@ -137,14 +137,14 @@ header#app-header {
   .nav-tabs { width: 100%; gap: 2px; flex-wrap: nowrap; }
   .nav-tab {
     flex: 1;
-    padding: 12px 2px;
+    padding: 18px 2px;
     font-size: 10.5px;
     line-height: 1.25;
     white-space: normal;
     border-radius: 8px;
   }
-  #app-shell { padding-bottom: 112px; }
-  #toast-root { bottom: 104px; }
+  #app-shell { padding-bottom: 140px; }
+  #toast-root { bottom: 132px; }
 }
 
 h1 { font-size: 26px; margin: 8px 0 18px; font-weight: 700; letter-spacing: -0.01em; }

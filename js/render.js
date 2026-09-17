@@ -45,6 +45,18 @@ function consistencyDots(state, habitId, dateISO, windowSize, label) {
   return `<div class="consistency"><div class="${wrapClass}">${dots}</div><span class="consistency-label">${done}/${target} ${label || 'this week'}</span></div>`;
 }
 
+// One dot per required completion for the habit's own frequency (7 for
+// daily, timesPerWeek, or timesPerMonth), filled as you log it, resetting
+// at the start of the next week/month. Used on Value/Goal pages instead of
+// consistencyDots, which Statistics keeps using unchanged.
+function periodDots(state, habit, dateISO) {
+  const { done, target, periodType } = habitPeriodProgress(state, habit, dateISO);
+  const dots = Array.from({ length: target }, (_, i) => `<span class="dot ${i < done ? 'dot--on' : ''}"></span>`).join('');
+  const wrapClass = target > 7 ? 'dots dots--wrap' : 'dots';
+  const label = periodType === 'month' ? 'this month' : 'this week';
+  return `<div class="consistency"><div class="${wrapClass}">${dots}</div><span class="consistency-label">${done}/${target} ${label}</span></div>`;
+}
+
 function monthLabel(dateISO) {
   const [y, m] = dateISO.split('-').map(Number);
   return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
@@ -122,7 +134,7 @@ function renderValueHabitRow(state, h) {
         </div>
       </div>
       <div class="habit-row-end">
-        ${consistencyDots(state, h.id, date)}
+        ${periodDots(state, h, date)}
         <button class="btn btn-tiny" data-action="edit">Edit</button>
       </div>
     </div>

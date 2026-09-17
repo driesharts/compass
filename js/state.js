@@ -219,6 +219,38 @@ function habitTarget(habit, windowSize) {
   return days;
 }
 
+// Progress within the habit's OWN period (the current calendar week for
+// daily/weekly habits, the current calendar month for monthly ones), used
+// for the dot display on Value/Goal pages. Dot count = the frequency you
+// set (7 for daily, timesPerWeek, or timesPerMonth) rather than a fixed
+// rolling window. Deliberately separate from consistency()/habitTarget(),
+// which Statistics' 30-day view still uses unchanged.
+function habitPeriodProgress(state, habit, dateISO) {
+  const type = habit && habit.frequency ? habit.frequency.type : 'daily';
+  const periodType = type === 'monthly' ? 'month' : 'week';
+  const target = type === 'weekly' ? Math.max(1, habit.frequency.timesPerWeek) : type === 'monthly' ? Math.max(1, habit.frequency.timesPerMonth) : 7;
+
+  const current = new Date(dateISO + 'T00:00:00');
+  let periodStart;
+  if (periodType === 'month') {
+    periodStart = new Date(current.getFullYear(), current.getMonth(), 1);
+  } else {
+    const day = current.getDay();
+    const diffToMonday = day === 0 ? 6 : day - 1;
+    periodStart = new Date(current);
+    periodStart.setDate(current.getDate() - diffToMonday);
+  }
+  const periodStartISO = dateToLocalISO(periodStart);
+
+  const days = [];
+  for (let d = new Date(periodStart); d <= current; d.setDate(d.getDate() + 1)) {
+    days.push(dateToLocalISO(d));
+  }
+  const done = days.filter((d) => isLoggedOn(state, habit.id, d)).length;
+
+  return { done: Math.min(done, target), target, periodType, periodStartISO, days };
+}
+
 function deleteHabit(state, habitId) {
   state.habits = state.habits.filter((h) => h.id !== habitId);
   state.logs = state.logs.filter((l) => l.habitId !== habitId);
