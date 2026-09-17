@@ -212,7 +212,18 @@ textarea { min-height: 70px; resize: vertical; }
 /* Values & Goals */
 .value-summary-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; user-select: none; }
 .value-summary-header h2 { margin: 0; }
-.value-toggle-caret { font-size: 13px; color: var(--muted); flex-shrink: 0; }
+.value-toggle-caret {
+  font-size: 20px;
+  color: var(--muted);
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+.value-summary-header:hover .value-toggle-caret { background: var(--bg); color: var(--text); }
 .value-summary-count { margin: 4px 0 0; }
 .value-expanded { margin-top: 0; }
 .actions-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
