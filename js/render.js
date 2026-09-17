@@ -352,31 +352,6 @@ function renderToday(state) {
   });
   wrap.appendChild(tomorrowPlanCard);
 
-  const entry = journalEntryForDate(state, date);
-  const { text: promptText, category: promptCategory } = promptForDate(state, date);
-  const promptCard = el(`
-    <div class="card prompt-card">
-      <label class="prompt-label">${escapeHtml(promptText)}</label>
-      <textarea id="today-journal" placeholder="Optional — a line or two is enough">${escapeHtml(entry ? entry.text : '')}</textarea>
-    </div>
-  `);
-  const ta = promptCard.querySelector('#today-journal');
-  ta.addEventListener('blur', () => {
-    const text = ta.value.trim();
-    let e = journalEntryForDate(state, date);
-    if (!text) {
-      if (e) state.journal = state.journal.filter((j) => j !== e);
-    } else if (e) {
-      e.text = text;
-      e.prompt = promptText;
-      e.category = promptCategory;
-    } else {
-      state.journal.push({ id: uid(), date, type: 'daily', prompt: promptText, category: promptCategory, text });
-    }
-    saveState(state);
-  });
-  wrap.appendChild(promptCard);
-
   wrap.appendChild(el(`<h2 class="section-heading">Completed today</h2>`));
 
   const loggedToday = state.logs.filter((l) => l.date === date);
@@ -540,6 +515,28 @@ function renderValueDetail(state, valueId) {
   actionsRow.querySelector('[data-action="add-todo"]').onclick = () => openTodoModal(state, value.id);
   wrap.appendChild(actionsRow);
 
+  const todos = todosForValue(state, value.id).filter((t) => t.status !== 'done');
+  wrap.appendChild(el(`<h2 class="section-heading">To-do's</h2>`));
+  if (todos.length === 0) {
+    wrap.appendChild(el(`<p class="muted small">No to-dos yet.</p>`));
+  } else {
+    const todoList = el(`<div class="habit-list"></div>`);
+    todos.forEach((t) => todoList.appendChild(renderValueTodoRow(state, t)));
+    wrap.appendChild(todoList);
+  }
+
+  const habits = habitsForValue(state, value.id)
+    .filter((h) => h.status !== 'completed')
+    .sort((a, b) => habitFrequencyRank(a) - habitFrequencyRank(b));
+  wrap.appendChild(el(`<h2 class="section-heading">Habits</h2>`));
+  if (habits.length === 0) {
+    wrap.appendChild(el(`<p class="muted small">No habits yet.</p>`));
+  } else {
+    const habitList = el(`<div class="habit-list"></div>`);
+    habits.forEach((h) => habitList.appendChild(renderValueHabitRow(state, h)));
+    wrap.appendChild(habitList);
+  }
+
   const goals = goalsForValue(state, value.id).filter((g) => g.status !== 'achieved');
   wrap.appendChild(el(`<h2 class="section-heading">Goals</h2>`));
   if (goals.length === 0) {
@@ -558,28 +555,6 @@ function renderValueDetail(state, valueId) {
       goalList.appendChild(card);
     });
     wrap.appendChild(goalList);
-  }
-
-  const habits = habitsForValue(state, value.id)
-    .filter((h) => h.status !== 'completed')
-    .sort((a, b) => habitFrequencyRank(a) - habitFrequencyRank(b));
-  wrap.appendChild(el(`<h2 class="section-heading">Habits</h2>`));
-  if (habits.length === 0) {
-    wrap.appendChild(el(`<p class="muted small">No habits yet.</p>`));
-  } else {
-    const habitList = el(`<div class="habit-list"></div>`);
-    habits.forEach((h) => habitList.appendChild(renderValueHabitRow(state, h)));
-    wrap.appendChild(habitList);
-  }
-
-  const todos = todosForValue(state, value.id).filter((t) => t.status !== 'done');
-  wrap.appendChild(el(`<h2 class="section-heading">To-do's</h2>`));
-  if (todos.length === 0) {
-    wrap.appendChild(el(`<p class="muted small">No to-dos yet.</p>`));
-  } else {
-    const todoList = el(`<div class="habit-list"></div>`);
-    todos.forEach((t) => todoList.appendChild(renderValueTodoRow(state, t)));
-    wrap.appendChild(todoList);
   }
 
   return wrap;
@@ -736,31 +711,44 @@ function renderJournal(state) {
   wrap.appendChild(el(`<h1>Journal</h1>`));
 
   const journalGoals = journalGoalOptions(state);
-  let composerGoalId = null;
+  const date = todayISO();
+
+  const dailyEntry = journalEntryForDate(state, date);
+  const { text: promptText, category: promptCategory } = promptForDate(state, date);
+  const promptCard = el(`
+    <div class="card prompt-card">
+      <label class="prompt-label">${escapeHtml(promptText)}</label>
+      <textarea id="daily-journal" placeholder="Optional — a line or two is enough">${escapeHtml(dailyEntry ? dailyEntry.text : '')}</textarea>
+    </div>
+  `);
+  const dailyTa = promptCard.querySelector('#daily-journal');
+  dailyTa.addEventListener('blur', () => {
+    const text = dailyTa.value.trim();
+    let e = journalEntryForDate(state, date);
+    if (!text) {
+      if (e) state.journal = state.journal.filter((j) => j !== e);
+    } else if (e) {
+      e.text = text;
+      e.prompt = promptText;
+      e.category = promptCategory;
+    } else {
+      state.journal.push({ id: uid(), date, type: 'daily', prompt: promptText, category: promptCategory, text });
+    }
+    saveState(state);
+  });
+  wrap.appendChild(promptCard);
 
   const addCard = el(`
     <div class="card">
       <textarea id="new-entry-text" placeholder="Write freely..."></textarea>
-      <label class="small muted" style="margin-top:10px;">What's this about?</label>
-      <div class="filter-chips">
-        <button type="button" class="filter-chip active" data-goal="">Freeform</button>
-        ${journalGoals.map((g) => `<button type="button" class="filter-chip" data-goal="${g.id}">${goalChipLabel(g)}</button>`).join('')}
-      </div>
       <button class="btn btn-primary" id="add-entry-btn" style="margin-top:12px;">Add entry</button>
     </div>
   `);
-  addCard.querySelectorAll('.filter-chip').forEach((btn) => {
-    btn.onclick = () => {
-      composerGoalId = btn.dataset.goal || null;
-      addCard.querySelectorAll('.filter-chip').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-    };
-  });
   addCard.querySelector('#add-entry-btn').onclick = () => {
     const ta = addCard.querySelector('#new-entry-text');
     const text = ta.value.trim();
     if (!text) return;
-    state.journal.push({ id: uid(), date: todayISO(), type: 'free', category: 'free', text, goalId: composerGoalId });
+    state.journal.push({ id: uid(), date: todayISO(), type: 'free', category: 'free', text, goalId: null });
     saveState(state);
     showToast('Journal entry added');
     renderApp(state);
