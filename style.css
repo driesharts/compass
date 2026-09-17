@@ -50,6 +50,20 @@
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* Belt-and-suspenders: some mobile browsers still auto-link things like
+   dates/phone numbers in plain text (turning them blue) even with the
+   format-detection meta tag set. Force them back to normal text color. */
+a[href^="tel:"], a[href^="sms:"], a[href^="mailto:"], [x-apple-data-detectors] {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+html {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+html::-webkit-scrollbar { display: none; }
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
