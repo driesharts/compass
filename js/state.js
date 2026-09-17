@@ -64,6 +64,12 @@ function todayISO() {
   return dateToLocalISO(new Date());
 }
 
+function tomorrowISO() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return dateToLocalISO(d);
+}
+
 function uid() {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }

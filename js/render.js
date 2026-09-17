@@ -200,27 +200,32 @@ function renderToday(state) {
   const wrap = el(`<div class="view"></div>`);
   wrap.appendChild(el(`<h1>Today</h1>`));
 
-  const plan = dayPlanForDate(state, date);
-  const planCard = el(`
-    <div class="card">
-      <label class="prompt-label">What do you want to get done today?</label>
-      <textarea id="today-plan" placeholder="Optional — jot down a plan, whenever you write it">${escapeHtml(plan ? plan.text : '')}</textarea>
-    </div>
-  `);
-  const planTa = planCard.querySelector('#today-plan');
-  planTa.addEventListener('blur', () => {
-    const text = planTa.value.trim();
-    let p = dayPlanForDate(state, date);
-    if (!text) {
-      if (p) state.dayPlans = state.dayPlans.filter((x) => x !== p);
-    } else if (p) {
-      p.text = text;
-    } else {
-      state.dayPlans.push({ id: uid(), date, text });
-    }
-    saveState(state);
-  });
-  wrap.appendChild(planCard);
+  function renderPlanCard(planDate, label, id) {
+    const plan = dayPlanForDate(state, planDate);
+    const card = el(`
+      <div class="card">
+        <label class="prompt-label">${escapeHtml(label)}</label>
+        <textarea id="${id}" placeholder="Optional — jot down a plan, whenever you write it">${escapeHtml(plan ? plan.text : '')}</textarea>
+      </div>
+    `);
+    const ta = card.querySelector(`#${id}`);
+    ta.addEventListener('blur', () => {
+      const text = ta.value.trim();
+      let p = dayPlanForDate(state, planDate);
+      if (!text) {
+        if (p) state.dayPlans = state.dayPlans.filter((x) => x !== p);
+      } else if (p) {
+        p.text = text;
+      } else {
+        state.dayPlans.push({ id: uid(), date: planDate, text });
+      }
+      saveState(state);
+    });
+    return card;
+  }
+
+  wrap.appendChild(renderPlanCard(date, 'What do you want to get done today?', 'today-plan'));
+  wrap.appendChild(renderPlanCard(tomorrowISO(), 'What do you want to get done tomorrow?', 'tomorrow-plan'));
 
   const entry = journalEntryForDate(state, date);
   const { text: promptText, category: promptCategory } = promptForDate(state, date);
@@ -274,7 +279,7 @@ function renderToday(state) {
         <div class="habit-main">
           <button class="log-toggle ${logged ? 'logged' : ''}" title="Mark done for today">${logged ? '✓' : ''}</button>
           <div class="habit-text">
-            <div class="habit-name">${escapeHtml(h.name)} ${frequencyLabel(h) ? `<span class="chip chip--neutral">${frequencyLabel(h)}</span>` : ''}</div>
+            <div class="habit-name">${escapeHtml(h.name)}</div>
             ${h.trigger ? `<div class="habit-trigger">${escapeHtml(h.trigger)}</div>` : ''}
             ${goal ? `<div class="habit-goal">→ ${escapeHtml(goal.title)}</div>` : ''}
             ${value ? `<div class="habit-goal">→ ${escapeHtml(value.name)}</div>` : ''}
@@ -511,8 +516,6 @@ function renderValuesGoals(state) {
           <div class="actions-row">
             <button class="btn btn-small" data-action="edit-value">Edit</button>
             <button class="btn btn-small" data-action="add-goal">+ Goal</button>
-            <button class="btn btn-small" data-action="add-direct-habit">+ Habit</button>
-            <button class="btn btn-small" data-action="add-direct-todo">+ To-do</button>
           </div>
           <div class="goal-list"></div>
           <div class="direct-habit-list"></div>
@@ -529,8 +532,6 @@ function renderValuesGoals(state) {
     };
     card.querySelector('[data-action="add-goal"]').onclick = () => openGoalModal(state, v.id);
     card.querySelector('[data-action="edit-value"]').onclick = () => openValueModal(state, v);
-    card.querySelector('[data-action="add-direct-habit"]').onclick = () => openHabitModal(state, { valueId: v.id });
-    card.querySelector('[data-action="add-direct-todo"]').onclick = () => openTodoModal(state, { valueId: v.id });
 
     const goalList = card.querySelector('.goal-list');
     if (goals.length === 0) {
@@ -598,22 +599,43 @@ const JOURNAL_CATEGORIES = [
   { id: 'free', label: 'Free-form' },
 ];
 
+function activeGoalOptionsHtml(state, selectedId) {
+  return state.values
+    .flatMap((v) =>
+      goalsForValue(state, v.id)
+        .filter((g) => g.status !== 'achieved')
+        .map(
+          (g) =>
+            `<option value="${g.id}" ${g.id === selectedId ? 'selected' : ''}>${escapeHtml(v.name)} → ${escapeHtml(g.title)}</option>`
+        )
+    )
+    .join('');
+}
+
 function renderJournal(state) {
   const wrap = el(`<div class="view"></div>`);
   wrap.appendChild(el(`<h1>Journal</h1>`));
 
+  const goalOptions = activeGoalOptionsHtml(state, null);
   const addCard = el(`
     <div class="card">
       <textarea id="new-entry-text" placeholder="Write freely..."></textarea>
-      <button class="btn btn-primary" id="add-entry-btn">Add entry</button>
+      <label class="small muted" style="margin-top:10px;">Related goal <span class="muted">(optional)</span></label>
+      <select id="new-entry-goal">
+        <option value="">None</option>
+        ${goalOptions}
+      </select>
+      <button class="btn btn-primary" id="add-entry-btn" style="margin-top:12px;">Add entry</button>
     </div>
   `);
   addCard.querySelector('#add-entry-btn').onclick = () => {
     const ta = addCard.querySelector('#new-entry-text');
     const text = ta.value.trim();
     if (!text) return;
-    state.journal.push({ id: uid(), date: todayISO(), type: 'free', category: 'free', text });
+    const goalId = addCard.querySelector('#new-entry-goal').value || null;
+    state.journal.push({ id: uid(), date: todayISO(), type: 'free', category: 'free', text, goalId });
     saveState(state);
+    showToast('Journal entry added');
     renderApp(state);
   };
   wrap.appendChild(addCard);
@@ -623,7 +645,7 @@ function renderJournal(state) {
     return wrap;
   }
 
-  const filter = { category: 'all', search: '' };
+  const filter = { category: 'all', search: '', goalId: null };
   const entryCategory = (e) => e.category || (e.type === 'free' ? 'free' : 'retro');
 
   const controls = el(`
@@ -636,6 +658,9 @@ function renderJournal(state) {
   `);
   wrap.appendChild(controls);
 
+  const goalFilterBar = el(`<div class="journal-goal-filter" style="display:none;"></div>`);
+  wrap.appendChild(goalFilterBar);
+
   const listContainer = el(`<div class="journal-list"></div>`);
   wrap.appendChild(listContainer);
 
@@ -643,8 +668,22 @@ function renderJournal(state) {
     const searchLower = filter.search.trim().toLowerCase();
     const entries = [...state.journal]
       .filter((e) => filter.category === 'all' || entryCategory(e) === filter.category)
+      .filter((e) => !filter.goalId || e.goalId === filter.goalId)
       .filter((e) => !searchLower || (e.text || '').toLowerCase().includes(searchLower) || (e.prompt || '').toLowerCase().includes(searchLower))
       .sort((a, b) => (a.date < b.date ? 1 : -1));
+
+    if (filter.goalId) {
+      const g = state.goals.find((x) => x.id === filter.goalId);
+      goalFilterBar.style.display = '';
+      goalFilterBar.innerHTML = `<span class="muted small">Showing notes for <strong>${escapeHtml(g ? g.title : 'a deleted goal')}</strong></span><button type="button" class="btn btn-tiny" id="clear-goal-filter">Clear</button>`;
+      goalFilterBar.querySelector('#clear-goal-filter').onclick = () => {
+        filter.goalId = null;
+        update();
+      };
+    } else {
+      goalFilterBar.style.display = 'none';
+      goalFilterBar.innerHTML = '';
+    }
 
     listContainer.innerHTML = '';
     if (entries.length === 0) {
@@ -658,15 +697,24 @@ function renderJournal(state) {
         currentMonth = month;
         listContainer.appendChild(el(`<div class="journal-month">${escapeHtml(month)}</div>`));
       }
-      listContainer.appendChild(
-        el(`
+      const goal = e.goalId ? state.goals.find((g) => g.id === e.goalId) : null;
+      const entryEl = el(`
         <div class="card journal-entry">
-          <div class="journal-date">${escapeHtml(e.date)}</div>
+          <div class="journal-entry-header">
+            <div class="journal-date">${escapeHtml(e.date)}</div>
+            ${goal ? `<button type="button" class="chip chip--neutral journal-goal-tag">→ ${escapeHtml(goal.title)}</button>` : ''}
+          </div>
           ${e.prompt ? `<div class="journal-prompt">${escapeHtml(e.prompt)}</div>` : ''}
           <div class="journal-text">${escapeHtml(e.text)}</div>
         </div>
-      `)
-      );
+      `);
+      if (goal) {
+        entryEl.querySelector('.journal-goal-tag').onclick = () => {
+          filter.goalId = goal.id;
+          update();
+        };
+      }
+      listContainer.appendChild(entryEl);
     });
   }
 
