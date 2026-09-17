@@ -217,6 +217,7 @@ textarea { min-height: 70px; resize: vertical; }
 .goal-date { font-size: 12px; color: var(--muted); }
 .goal-date--overdue { color: var(--danger); font-style: italic; }
 .goal-why { font-size: 13px; margin-top: 4px; }
+.goal-notes { font-size: 12px; color: var(--muted); margin-top: 4px; white-space: pre-wrap; }
 
 .chip { font-size: 11px; padding: 3px 8px; border-radius: 999px; }
 .chip--achieved { background: var(--intrinsic-bg); color: var(--intrinsic-text); font-weight: 600; }
@@ -238,9 +239,11 @@ textarea { min-height: 70px; resize: vertical; }
 .btn-tiny:hover { color: var(--accent-dark); border-color: var(--accent); }
 
 .habit-sublist, .todo-sublist { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
-.habit-sub-row { font-size: 13px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.habit-sub-row { font-size: 13px; }
+.habit-sub-main { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 .habit-sub-info { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .habit-sub-row .habit-trigger { font-style: italic; }
+.habit-sub-notes { font-size: 12px; color: var(--muted); margin-top: 3px; white-space: pre-wrap; }
 
 .direct-habit-list { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
 .direct-habit-heading { margin: 0 0 2px; }

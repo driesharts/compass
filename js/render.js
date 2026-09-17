@@ -56,6 +56,7 @@ function buildClaudePrompt(state, goal) {
   if (value) lines.push(`Value it serves: ${value.name}`);
   if (goal.why) lines.push(`Why it matters to me: ${goal.why}`);
   if (goal.targetDate) lines.push(`Target date: ${goal.targetDate}`);
+  if (goal.notes) lines.push(`Notes: ${goal.notes}`);
   if (habits.length) {
     lines.push('');
     lines.push('Habits toward it:');
@@ -437,12 +438,15 @@ function renderValuesGoals(state) {
   function renderHabitRow(habit, parent) {
     const habitRowEl = el(`
       <div class="habit-sub-row">
-        <div class="habit-sub-info">
-          <span class="habit-name">${escapeHtml(habit.name)}</span>
-          ${frequencyLabel(habit) ? `<span class="chip chip--neutral">${frequencyLabel(habit)}</span>` : ''}
-          ${habit.trigger ? `<span class="habit-trigger">${escapeHtml(habit.trigger)}</span>` : ''}
+        <div class="habit-sub-main">
+          <div class="habit-sub-info">
+            <span class="habit-name">${escapeHtml(habit.name)}</span>
+            ${frequencyLabel(habit) ? `<span class="chip chip--neutral">${frequencyLabel(habit)}</span>` : ''}
+            ${habit.trigger ? `<span class="habit-trigger">${escapeHtml(habit.trigger)}</span>` : ''}
+          </div>
+          <button class="btn btn-tiny" data-action="edit-habit">Edit</button>
         </div>
-        <button class="btn btn-tiny" data-action="edit-habit">Edit</button>
+        ${habit.notes ? `<div class="habit-sub-notes">${escapeHtml(habit.notes)}</div>` : ''}
       </div>
     `);
     habitRowEl.querySelector('[data-action="edit-habit"]').onclick = () => openHabitModal(state, parent, habit);
@@ -452,11 +456,13 @@ function renderValuesGoals(state) {
   function renderTodoRow(todo) {
     const todoRowEl = el(`
       <div class="habit-sub-row todo-row">
-        <div class="habit-sub-info">
-          <button class="todo-toggle" data-action="complete-todo" title="Mark done"></button>
-          <span class="habit-name">${escapeHtml(todo.title)}</span>
+        <div class="habit-sub-main">
+          <div class="habit-sub-info">
+            <button class="todo-toggle" data-action="complete-todo" title="Mark done"></button>
+            <span class="habit-name">${escapeHtml(todo.title)}</span>
+          </div>
+          <button class="btn btn-tiny" data-action="delete-todo">Delete</button>
         </div>
-        <button class="btn btn-tiny" data-action="delete-todo">Delete</button>
       </div>
     `);
     todoRowEl.querySelector('[data-action="complete-todo"]').onclick = () => {
@@ -507,6 +513,7 @@ function renderValuesGoals(state) {
           <div class="goal-title">${escapeHtml(g.title)}</div>
           ${targetDateInfo(g)}
           ${g.why ? `<div class="goal-why">${escapeHtml(g.why)}</div>` : ''}
+          ${g.notes ? `<div class="goal-notes">${escapeHtml(g.notes)}</div>` : ''}
           <div class="actions-row">
             <button class="btn btn-small" data-action="edit-goal">Edit</button>
             <button class="btn btn-small" data-action="copy-claude">Copy for Claude</button>
@@ -751,12 +758,14 @@ function renderHistory(state) {
   function historyRow(name, type, completedAt, onDelete) {
     const row = el(`
       <div class="habit-sub-row">
-        <div class="habit-sub-info">
-          <span class="habit-name">✓ ${escapeHtml(name)}</span>
-          <span class="chip chip--neutral">${escapeHtml(type)}</span>
-          ${completedAt ? `<span class="muted small">completed ${escapeHtml(completedAt)}</span>` : ''}
+        <div class="habit-sub-main">
+          <div class="habit-sub-info">
+            <span class="habit-name">✓ ${escapeHtml(name)}</span>
+            <span class="chip chip--neutral">${escapeHtml(type)}</span>
+            ${completedAt ? `<span class="muted small">completed ${escapeHtml(completedAt)}</span>` : ''}
+          </div>
+          <button class="btn btn-tiny" data-action="delete">Delete</button>
         </div>
-        <button class="btn btn-tiny" data-action="delete">Delete</button>
       </div>
     `);
     row.querySelector('[data-action="delete"]').onclick = onDelete;
@@ -997,6 +1006,8 @@ function openGoalModal(state, valueId, existingGoal) {
       <textarea id="g-why" placeholder="Write a sentence or two">${isEdit ? escapeHtml(existingGoal.why || '') : ''}</textarea>
       <label>Target date</label>
       <input type="date" id="g-date" value="${isEdit ? escapeHtml(existingGoal.targetDate || '') : ''}" />
+      <label>Notes <span class="muted small">(anything else worth keeping track of)</span></label>
+      <textarea id="g-notes" placeholder="Optional">${isEdit ? escapeHtml(existingGoal.notes || '') : ''}</textarea>
       <div class="modal-actions modal-actions--split">
         <div class="modal-actions-left">
           ${isEdit && existingGoal.status !== 'achieved' ? '<button class="btn btn-secondary" id="g-achieve">Mark as achieved</button>' : ''}
@@ -1016,8 +1027,9 @@ function openGoalModal(state, valueId, existingGoal) {
     if (!title) return;
     const why = content.querySelector('#g-why').value.trim();
     const targetDate = content.querySelector('#g-date').value;
+    const notes = content.querySelector('#g-notes').value.trim();
     if (isEdit) {
-      Object.assign(existingGoal, { title, why, targetDate });
+      Object.assign(existingGoal, { title, why, targetDate, notes });
     } else {
       state.goals.push({
         id: uid(),
@@ -1025,6 +1037,7 @@ function openGoalModal(state, valueId, existingGoal) {
         title,
         why,
         targetDate,
+        notes,
         status: 'active',
         createdAt: todayISO(),
       });
@@ -1083,6 +1096,8 @@ function openHabitModal(state, parent, existingHabit) {
         <label>How many times a month?</label>
         <input type="number" id="h-times-per-month" min="1" max="30" value="${timesPerMonth}" />
       </div>
+      <label>Notes <span class="muted small">(optional)</span></label>
+      <textarea id="h-notes" placeholder="Optional">${isEdit ? escapeHtml(existingHabit.notes || '') : ''}</textarea>
       <div class="modal-actions modal-actions--split">
         <div class="modal-actions-left">
           ${isEdit && existingHabit.status !== 'completed' ? '<button class="btn btn-secondary" id="h-complete">Mark as completed</button>' : ''}
@@ -1111,8 +1126,9 @@ function openHabitModal(state, parent, existingHabit) {
     } else if (frequencyType === 'monthly') {
       frequency = { type: 'monthly', timesPerMonth: Math.max(1, Math.min(30, Number(content.querySelector('#h-times-per-month').value) || 1)) };
     }
+    const notes = content.querySelector('#h-notes').value.trim();
     if (isEdit) {
-      Object.assign(existingHabit, { name, trigger, frequency });
+      Object.assign(existingHabit, { name, trigger, frequency, notes });
     } else {
       state.habits.push({
         id: uid(),
@@ -1121,6 +1137,7 @@ function openHabitModal(state, parent, existingHabit) {
         name,
         trigger,
         frequency,
+        notes,
         status: 'active',
         createdAt: todayISO(),
       });
@@ -1181,7 +1198,7 @@ function openValueModal(state, value) {
       <h2>Edit value</h2>
       <label>Name</label>
       <input type="text" id="v-name" value="${escapeHtml(value.name)}" />
-      <label>Note</label>
+      <label>Notes</label>
       <textarea id="v-note">${escapeHtml(value.note || '')}</textarea>
       <div class="modal-actions modal-actions--split">
         <div class="modal-actions-left">
