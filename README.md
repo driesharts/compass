@@ -8,12 +8,14 @@ No build step, no install. Open `index.html` in a browser, or run it via the Cla
 
 ## How it works
 
-- **Values** — a handful of directions that matter to you (growth, connection, health...). Rarely change. Editable and deletable (deleting cascades to its goals/habits).
-- **Goals** — concrete, dated milestones under a value, e.g. "Watch a Netflix series in Spanish without subtitles by March 2027." Each goal has a title, a *why*, and a target date (with a "days left" / "days past" indicator). Editable, deletable, and markable as achieved (closes the loop instead of just sitting there).
-- **Habits** — the action under a goal, defined as a trigger ("if it's 8pm, then I do 20 min of Spanish"), not just a name. Frequency is either daily (default) or a target number of times per week — a 2x/week habit is measured against "2 this week," not "7," so it doesn't read as failing on the days it's not supposed to happen. Editable and deletable.
-- **Today** — one-tap logging per habit, a rolling 7-day consistency view (not a fragile streak — missing a day doesn't reset anything), and an optional one-line daily reflection prompt.
+- **Values** — a handful of directions that matter to you (growth, connection, health...). Rarely change. Editable and deletable (deleting cascades to its goals, habits, and to-dos).
+- **Goals** — concrete, dated milestones under a value, e.g. "Watch a Netflix series in Spanish without subtitles by March 2027." Each goal has a title, a *why*, and a target date (with a "days left" / "days past" indicator). Editable, deletable, and markable as achieved (moves it to History instead of just sitting there).
+- **Habits** — the action under a goal, defined as a trigger ("if it's 8pm, then I do 20 min of Spanish"), not just a name. A habit can also attach directly to a value with no goal in between, for ongoing practices that don't have a milestone shape (e.g. "stretch daily" under Health). Frequency is daily, a target number of times per week, or per month — a 2x/week habit is measured against "2 this week," not "7," so it doesn't read as failing on the days it's not supposed to happen. Editable, deletable, and markable as completed (moves it to History, preserving its log history instead of erasing it).
+- **To-dos** — one-off action items under a goal (e.g. "sign up for the race"), distinct from recurring habits. Check one off and it moves to History; delete it if it's no longer relevant.
+- **Today** — one-tap logging per habit and to-do, grouped by the value they serve, a rolling 7-day consistency view per habit (not a fragile streak — missing a day doesn't reset anything), and an optional one-line daily reflection prompt.
 - **Journal** — free-form entries plus the daily prompts, grouped by month, with search and category filters (Retrospective, Future-self, Socratic, Values, Motive, From your data, Free-form).
-- **Statistics** — stat tiles, 30-day consistency per habit, and a "where your attention went" chart per value (distinguishing "no habit set up yet" from "habit exists but unused").
+- **Statistics** — stat tiles, 30-day consistency per habit (grouped by value), and a "where your attention went" chart per value (distinguishing "no habit set up yet" from "habit exists but unused").
+- **History** — achieved goals and completed habits/to-dos, grouped by value and goal instead of dumped in one flat list. Keeps the active views focused on what's still in progress; each entry can be permanently deleted from here once you're done with it.
 - **Copy for Claude** — on any goal, copies a formatted summary (title, why, target date, habits) to your clipboard, ready to paste into a Claude conversation for research-grounded feedback.
 
 ## Reflection prompts, not a scored audit

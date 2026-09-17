@@ -11,8 +11,9 @@ function escapeHtml(str) {
 }
 
 function frequencyLabel(habit) {
-  if (habit && habit.frequency && habit.frequency.type === 'weekly') {
-    return `${habit.frequency.timesPerWeek}x/week`;
+  if (habit && habit.frequency) {
+    if (habit.frequency.type === 'weekly') return `${habit.frequency.timesPerWeek}x/week`;
+    if (habit.frequency.type === 'monthly') return `${habit.frequency.timesPerMonth}x/month`;
   }
   return '';
 }
@@ -122,6 +123,7 @@ function renderApp(state) {
   else if (view === 'values') container.appendChild(renderValuesGoals(state));
   else if (view === 'journal') container.appendChild(renderJournal(state));
   else if (view === 'stats') container.appendChild(renderStats(state));
+  else if (view === 'history') container.appendChild(renderHistory(state));
   else if (view === 'settings') container.appendChild(renderSettings(state));
 }
 
@@ -251,8 +253,9 @@ function renderToday(state) {
   });
   wrap.appendChild(promptCard);
 
-  const activeHabits = state.habits;
-  if (activeHabits.length === 0) {
+  const activeHabits = state.habits.filter((h) => h.status !== 'completed');
+  const activeTodos = state.todos.filter((t) => t.status !== 'done');
+  if (activeHabits.length === 0 && activeTodos.length === 0) {
     wrap.appendChild(
       el(`
       <div class="empty-state">
@@ -268,9 +271,9 @@ function renderToday(state) {
     return wrap;
   }
 
-  const list = el(`<div class="habit-list"></div>`);
-  activeHabits.forEach((h) => {
-    const goal = state.goals.find((g) => g.id === h.goalId);
+  function renderHabitCard(h) {
+    const goal = h.goalId ? state.goals.find((g) => g.id === h.goalId) : null;
+    const value = !h.goalId ? state.values.find((v) => v.id === h.valueId) : null;
     const logged = isLoggedOn(state, h.id, date);
     const row = el(`
       <div class="card habit-row">
@@ -280,6 +283,7 @@ function renderToday(state) {
             <div class="habit-name">${escapeHtml(h.name)} ${frequencyLabel(h) ? `<span class="chip chip--neutral">${frequencyLabel(h)}</span>` : ''}</div>
             ${h.trigger ? `<div class="habit-trigger">${escapeHtml(h.trigger)}</div>` : ''}
             ${goal ? `<div class="habit-goal">→ ${escapeHtml(goal.title)}</div>` : ''}
+            ${value ? `<div class="habit-goal">→ ${escapeHtml(value.name)}</div>` : ''}
           </div>
         </div>
         ${consistencyDots(state, h.id, date)}
@@ -294,9 +298,51 @@ function renderToday(state) {
       saveState(state);
       renderApp(state);
     };
-    list.appendChild(row);
+    return row;
+  }
+
+  function renderTodoCard(t) {
+    const goal = state.goals.find((g) => g.id === t.goalId);
+    const row = el(`
+      <div class="card habit-row">
+        <div class="habit-main">
+          <button class="log-toggle" title="Mark done"></button>
+          <div class="habit-text">
+            <div class="habit-name">${escapeHtml(t.title)} <span class="chip chip--neutral">to-do</span></div>
+            ${goal ? `<div class="habit-goal">→ ${escapeHtml(goal.title)}</div>` : ''}
+          </div>
+        </div>
+      </div>
+    `);
+    row.querySelector('.log-toggle').onclick = () => {
+      t.status = 'done';
+      t.completedAt = todayISO();
+      saveState(state);
+      renderApp(state);
+    };
+    return row;
+  }
+
+  const groups = new Map();
+  const groupFor = (valueId) => {
+    const key = valueId || '_other';
+    if (!groups.has(key)) groups.set(key, { habits: [], todos: [] });
+    return groups.get(key);
+  };
+  activeHabits.forEach((h) => groupFor(ownerValueId(state, h)).habits.push(h));
+  activeTodos.forEach((t) => groupFor(ownerValueId(state, t)).todos.push(t));
+
+  const orderedKeys = [...state.values.map((v) => v.id), '_other'].filter((k) => groups.has(k));
+  orderedKeys.forEach((key) => {
+    const value = state.values.find((v) => v.id === key);
+    const group = groups.get(key);
+    wrap.appendChild(el(`<h2 class="today-group-heading">${escapeHtml(value ? value.name : 'Other')}</h2>`));
+    const list = el(`<div class="habit-list"></div>`);
+    group.habits.forEach((h) => list.appendChild(renderHabitCard(h)));
+    group.todos.forEach((t) => list.appendChild(renderTodoCard(t)));
+    wrap.appendChild(list);
   });
-  wrap.appendChild(list);
+
   return wrap;
 }
 
@@ -366,8 +412,50 @@ function renderValuesGoals(state) {
     return wrap;
   }
 
+  function renderHabitRow(habit, parent) {
+    const habitRowEl = el(`
+      <div class="habit-sub-row">
+        <div class="habit-sub-info">
+          <span class="habit-name">${escapeHtml(habit.name)}</span>
+          ${frequencyLabel(habit) ? `<span class="chip chip--neutral">${frequencyLabel(habit)}</span>` : ''}
+          ${habit.trigger ? `<span class="habit-trigger">${escapeHtml(habit.trigger)}</span>` : ''}
+        </div>
+        <button class="btn btn-tiny" data-action="edit-habit">Edit</button>
+      </div>
+    `);
+    habitRowEl.querySelector('[data-action="edit-habit"]').onclick = () => openHabitModal(state, parent, habit);
+    return habitRowEl;
+  }
+
+  function renderTodoRow(todo) {
+    const todoRowEl = el(`
+      <div class="habit-sub-row todo-row">
+        <div class="habit-sub-info">
+          <button class="todo-toggle" data-action="complete-todo" title="Mark done"></button>
+          <span class="habit-name">${escapeHtml(todo.title)}</span>
+        </div>
+        <button class="btn btn-tiny" data-action="delete-todo">Delete</button>
+      </div>
+    `);
+    todoRowEl.querySelector('[data-action="complete-todo"]').onclick = () => {
+      todo.status = 'done';
+      todo.completedAt = todayISO();
+      saveState(state);
+      renderApp(state);
+    };
+    todoRowEl.querySelector('[data-action="delete-todo"]').onclick = () => {
+      openConfirmModal('Delete this to-do? This cannot be undone.', 'Delete', () => {
+        deleteTodo(state, todo.id);
+        saveState(state);
+        renderApp(state);
+      });
+    };
+    return todoRowEl;
+  }
+
   visibleValues.forEach((v) => {
-    const goals = goalsForValue(state, v.id);
+    const goals = goalsForValue(state, v.id).filter((g) => g.status !== 'achieved');
+    const directHabits = directHabitsForValue(state, v.id).filter((h) => h.status !== 'completed');
     const card = el(`
       <div class="card value-card">
         <h2>${escapeHtml(v.name)}</h2>
@@ -375,34 +463,40 @@ function renderValuesGoals(state) {
         <div class="actions-row">
           <button class="btn btn-small" data-action="edit-value">Edit</button>
           <button class="btn btn-small" data-action="add-goal">+ Goal</button>
+          <button class="btn btn-small" data-action="add-direct-habit">+ Habit</button>
         </div>
         <div class="goal-list"></div>
+        <div class="direct-habit-list"></div>
       </div>
     `);
     card.querySelector('[data-action="add-goal"]').onclick = () => openGoalModal(state, v.id);
     card.querySelector('[data-action="edit-value"]').onclick = () => openValueModal(state, v);
+    card.querySelector('[data-action="add-direct-habit"]').onclick = () => openHabitModal(state, { valueId: v.id });
 
     const goalList = card.querySelector('.goal-list');
     if (goals.length === 0) {
       goalList.appendChild(el(`<p class="muted small">No goals under this value yet.</p>`));
     }
     goals.forEach((g) => {
-      const habits = habitsForGoal(state, g.id);
-      const achieved = g.status === 'achieved';
+      const habits = habitsForGoal(state, g.id).filter((h) => h.status !== 'completed');
+      const todos = todosForGoal(state, g.id).filter((t) => t.status !== 'done');
       const goalEl = el(`
-        <div class="goal-card ${achieved ? 'goal-card--achieved' : ''}">
-          <div class="goal-title">${escapeHtml(g.title)} ${achieved ? '<span class="chip chip--achieved">✓ Achieved</span>' : ''}</div>
+        <div class="goal-card">
+          <div class="goal-title">${escapeHtml(g.title)}</div>
           ${targetDateInfo(g)}
           ${g.why ? `<div class="goal-why">${escapeHtml(g.why)}</div>` : ''}
           <div class="actions-row">
             <button class="btn btn-small" data-action="edit-goal">Edit</button>
             <button class="btn btn-small" data-action="copy-claude">Copy for Claude</button>
             <button class="btn btn-small" data-action="add-habit">+ Habit</button>
+            <button class="btn btn-small" data-action="add-todo">+ To-do</button>
           </div>
           <div class="habit-sublist"></div>
+          <div class="todo-sublist"></div>
         </div>
       `);
-      goalEl.querySelector('[data-action="add-habit"]').onclick = () => openHabitModal(state, g.id);
+      goalEl.querySelector('[data-action="add-habit"]').onclick = () => openHabitModal(state, { goalId: g.id });
+      goalEl.querySelector('[data-action="add-todo"]').onclick = () => openTodoModal(state, g.id);
       goalEl.querySelector('[data-action="edit-goal"]').onclick = () => openGoalModal(state, v.id, g);
       const copyBtn = goalEl.querySelector('[data-action="copy-claude"]');
       copyBtn.onclick = () => {
@@ -424,22 +518,19 @@ function renderValuesGoals(state) {
       if (habits.length === 0) {
         sub.appendChild(el(`<p class="muted small">No habits yet.</p>`));
       }
-      habits.forEach((h) => {
-        const habitRowEl = el(`
-          <div class="habit-sub-row">
-            <div class="habit-sub-info">
-              <span class="habit-name">${escapeHtml(h.name)}</span>
-              ${frequencyLabel(h) ? `<span class="chip chip--neutral">${frequencyLabel(h)}</span>` : ''}
-              ${h.trigger ? `<span class="habit-trigger">${escapeHtml(h.trigger)}</span>` : ''}
-            </div>
-            <button class="btn btn-tiny" data-action="edit-habit">Edit</button>
-          </div>
-        `);
-        habitRowEl.querySelector('[data-action="edit-habit"]').onclick = () => openHabitModal(state, g.id, h);
-        sub.appendChild(habitRowEl);
-      });
+      habits.forEach((h) => sub.appendChild(renderHabitRow(h, { goalId: g.id })));
+
+      const todoSub = goalEl.querySelector('.todo-sublist');
+      todos.forEach((t) => todoSub.appendChild(renderTodoRow(t)));
+
       goalList.appendChild(goalEl);
     });
+
+    const directList = card.querySelector('.direct-habit-list');
+    if (directHabits.length > 0) {
+      directList.appendChild(el(`<p class="muted small direct-habit-heading">Ongoing habits (not tied to a specific goal)</p>`));
+      directHabits.forEach((h) => directList.appendChild(renderHabitRow(h, { valueId: v.id })));
+    }
 
     wrap.appendChild(card);
   });
@@ -559,30 +650,45 @@ function renderStats(state) {
   const date = todayISO();
   const daysActive = Math.max(1, daysBetween(state.createdAt, date) + 1);
 
+  const activeHabits = state.habits.filter((h) => h.status !== 'completed');
+  const activeTodos = state.todos.filter((t) => t.status !== 'done');
+
   const tiles = el(`
     <div class="stat-tiles">
       <div class="stat-tile"><div class="stat-tile-value">${state.values.length}</div><div class="stat-tile-label">Values</div></div>
       <div class="stat-tile"><div class="stat-tile-value">${state.goals.length}</div><div class="stat-tile-label">Goals</div></div>
-      <div class="stat-tile"><div class="stat-tile-value">${state.habits.length}</div><div class="stat-tile-label">Habits</div></div>
+      <div class="stat-tile"><div class="stat-tile-value">${activeHabits.length}</div><div class="stat-tile-label">Habits</div></div>
+      <div class="stat-tile"><div class="stat-tile-value">${activeTodos.length}</div><div class="stat-tile-label">To-dos</div></div>
       <div class="stat-tile"><div class="stat-tile-value">${journalCountInRange(state, date, 30)}</div><div class="stat-tile-label">Journal entries (30d)</div></div>
       <div class="stat-tile"><div class="stat-tile-value">${daysActive}</div><div class="stat-tile-label">Days using Compass</div></div>
     </div>
   `);
   wrap.appendChild(tiles);
 
-  const activeHabits = state.habits;
   if (activeHabits.length > 0) {
-    const card = el(`<div class="card"><h2>Consistency, last 30 days</h2><div class="stat-habit-list"></div></div>`);
-    const list = card.querySelector('.stat-habit-list');
+    const card = el(`<div class="card"><h2>Consistency, last 30 days</h2></div>`);
+    const groups = new Map();
     activeHabits.forEach((h) => {
-      list.appendChild(
-        el(`
-        <div class="stat-habit-row">
-          <span class="habit-name">${escapeHtml(h.name)} ${frequencyLabel(h) ? `<span class="chip chip--neutral">${frequencyLabel(h)}</span>` : ''}</span>
-          ${consistencyDots(state, h.id, date, 30, 'last 30 days')}
-        </div>
-      `)
-      );
+      const key = ownerValueId(state, h) || '_other';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(h);
+    });
+    const orderedKeys = [...state.values.map((v) => v.id), '_other'].filter((k) => groups.has(k));
+    orderedKeys.forEach((key) => {
+      const value = state.values.find((v) => v.id === key);
+      card.appendChild(el(`<p class="stat-group-heading">${escapeHtml(value ? value.name : 'Other')}</p>`));
+      const list = el(`<div class="stat-habit-list"></div>`);
+      groups.get(key).forEach((h) => {
+        list.appendChild(
+          el(`
+          <div class="stat-habit-row">
+            <span class="habit-name">${escapeHtml(h.name)} ${frequencyLabel(h) ? `<span class="chip chip--neutral">${frequencyLabel(h)}</span>` : ''}</span>
+            ${consistencyDots(state, h.id, date, 30, 'last 30 days')}
+          </div>
+        `)
+        );
+      });
+      card.appendChild(list);
     });
     wrap.appendChild(card);
   }
@@ -610,6 +716,116 @@ function renderStats(state) {
       </div>
     `);
     wrap.appendChild(card);
+  }
+
+  return wrap;
+}
+
+function renderHistory(state) {
+  const wrap = el(`<div class="view"></div>`);
+  wrap.appendChild(el(`<h1>History</h1>`));
+  wrap.appendChild(el(`<p class="muted small">Achieved goals, and habits or to-dos you've marked complete — kept here instead of cluttering the active views.</p>`));
+
+  function historyRow(name, type, completedAt, onDelete) {
+    const row = el(`
+      <div class="habit-sub-row">
+        <div class="habit-sub-info">
+          <span class="habit-name">✓ ${escapeHtml(name)}</span>
+          <span class="chip chip--neutral">${escapeHtml(type)}</span>
+          ${completedAt ? `<span class="muted small">completed ${escapeHtml(completedAt)}</span>` : ''}
+        </div>
+        <button class="btn btn-tiny" data-action="delete">Delete</button>
+      </div>
+    `);
+    row.querySelector('[data-action="delete"]').onclick = onDelete;
+    return row;
+  }
+
+  let anySection = false;
+
+  state.values.forEach((v) => {
+    const goals = goalsForValue(state, v.id);
+    const relevantGoals = goals.filter(
+      (g) =>
+        g.status === 'achieved' ||
+        habitsForGoal(state, g.id).some((h) => h.status === 'completed') ||
+        todosForGoal(state, g.id).some((t) => t.status === 'done')
+    );
+    const directCompletedHabits = directHabitsForValue(state, v.id).filter((h) => h.status === 'completed');
+
+    if (relevantGoals.length === 0 && directCompletedHabits.length === 0) return;
+    anySection = true;
+
+    const card = el(`
+      <div class="card value-card">
+        <h2>${escapeHtml(v.name)}</h2>
+        <div class="goal-list"></div>
+        <div class="direct-habit-list"></div>
+      </div>
+    `);
+    const goalList = card.querySelector('.goal-list');
+
+    relevantGoals.forEach((g) => {
+      const achieved = g.status === 'achieved';
+      const completedHabits = habitsForGoal(state, g.id).filter((h) => h.status === 'completed');
+      const doneTodos = todosForGoal(state, g.id).filter((t) => t.status === 'done');
+      const goalEl = el(`
+        <div class="goal-card">
+          <div class="goal-header-row">
+            <div class="goal-title">${escapeHtml(g.title)} ${achieved ? '<span class="chip chip--achieved">✓ Achieved</span>' : ''}</div>
+            <button class="btn btn-tiny" data-action="edit-goal">Edit</button>
+          </div>
+          <div class="habit-sublist"></div>
+        </div>
+      `);
+      goalEl.querySelector('[data-action="edit-goal"]').onclick = () => openGoalModal(state, v.id, g);
+      const sub = goalEl.querySelector('.habit-sublist');
+      completedHabits.forEach((h) => {
+        sub.appendChild(
+          historyRow(h.name, 'habit', h.completedAt, () => {
+            openConfirmModal('Delete this habit permanently?', 'Delete', () => {
+              deleteHabit(state, h.id);
+              saveState(state);
+              renderApp(state);
+            });
+          })
+        );
+      });
+      doneTodos.forEach((t) => {
+        sub.appendChild(
+          historyRow(t.title, 'to-do', t.completedAt, () => {
+            openConfirmModal('Delete this to-do permanently?', 'Delete', () => {
+              deleteTodo(state, t.id);
+              saveState(state);
+              renderApp(state);
+            });
+          })
+        );
+      });
+      goalList.appendChild(goalEl);
+    });
+
+    const directList = card.querySelector('.direct-habit-list');
+    if (directCompletedHabits.length > 0) {
+      directList.appendChild(el(`<p class="muted small direct-habit-heading">Completed ongoing habits</p>`));
+      directCompletedHabits.forEach((h) => {
+        directList.appendChild(
+          historyRow(h.name, 'habit', h.completedAt, () => {
+            openConfirmModal('Delete this habit permanently?', 'Delete', () => {
+              deleteHabit(state, h.id);
+              saveState(state);
+              renderApp(state);
+            });
+          })
+        );
+      });
+    }
+
+    wrap.appendChild(card);
+  });
+
+  if (!anySection) {
+    wrap.appendChild(el(`<div class="empty-state"><p>Nothing here yet — achieved goals and completed habits or to-dos will show up here.</p></div>`));
   }
 
   return wrap;
@@ -818,10 +1034,11 @@ function openGoalModal(state, valueId, existingGoal) {
   openModal(content);
 }
 
-function openHabitModal(state, goalId, existingHabit) {
+function openHabitModal(state, parent, existingHabit) {
   const isEdit = !!existingHabit;
-  const isWeekly = isEdit && existingHabit.frequency && existingHabit.frequency.type === 'weekly';
-  const timesPerWeek = isWeekly ? existingHabit.frequency.timesPerWeek : 2;
+  const freqType = isEdit && existingHabit.frequency ? existingHabit.frequency.type : 'daily';
+  const timesPerWeek = freqType === 'weekly' ? existingHabit.frequency.timesPerWeek : 2;
+  const timesPerMonth = freqType === 'monthly' ? existingHabit.frequency.timesPerMonth : 2;
 
   const content = el(`
     <div class="modal-body">
@@ -832,15 +1049,21 @@ function openHabitModal(state, goalId, existingHabit) {
       <input type="text" id="h-trigger" placeholder="If it's 8pm, then I do 20 min of Spanish" value="${isEdit ? escapeHtml(existingHabit.trigger || '') : ''}" />
       <label>Frequency</label>
       <select id="h-frequency-type">
-        <option value="daily" ${!isWeekly ? 'selected' : ''}>Daily</option>
-        <option value="weekly" ${isWeekly ? 'selected' : ''}>A few times a week</option>
+        <option value="daily" ${freqType === 'daily' ? 'selected' : ''}>Daily</option>
+        <option value="weekly" ${freqType === 'weekly' ? 'selected' : ''}>A few times a week</option>
+        <option value="monthly" ${freqType === 'monthly' ? 'selected' : ''}>A few times a month</option>
       </select>
-      <div id="h-weekly-count" style="${isWeekly ? '' : 'display:none;'}">
+      <div id="h-weekly-count" style="${freqType === 'weekly' ? '' : 'display:none;'}">
         <label>How many times a week?</label>
         <input type="number" id="h-times-per-week" min="1" max="7" value="${timesPerWeek}" />
       </div>
+      <div id="h-monthly-count" style="${freqType === 'monthly' ? '' : 'display:none;'}">
+        <label>How many times a month?</label>
+        <input type="number" id="h-times-per-month" min="1" max="30" value="${timesPerMonth}" />
+      </div>
       <div class="modal-actions modal-actions--split">
         <div class="modal-actions-left">
+          ${isEdit && existingHabit.status !== 'completed' ? '<button class="btn btn-secondary" id="h-complete">Mark as completed</button>' : ''}
           ${isEdit ? '<button class="btn btn-danger" id="h-delete">Delete</button>' : ''}
         </div>
         <div class="modal-actions-right">
@@ -852,6 +1075,7 @@ function openHabitModal(state, goalId, existingHabit) {
   `);
   content.querySelector('#h-frequency-type').addEventListener('change', (e) => {
     content.querySelector('#h-weekly-count').style.display = e.target.value === 'weekly' ? '' : 'none';
+    content.querySelector('#h-monthly-count').style.display = e.target.value === 'monthly' ? '' : 'none';
   });
   content.querySelector('#h-cancel').onclick = closeModal;
   content.querySelector('#h-save').onclick = () => {
@@ -859,20 +1083,41 @@ function openHabitModal(state, goalId, existingHabit) {
     if (!name) return;
     const trigger = content.querySelector('#h-trigger').value.trim();
     const frequencyType = content.querySelector('#h-frequency-type').value;
-    const frequency =
-      frequencyType === 'weekly'
-        ? { type: 'weekly', timesPerWeek: Math.max(1, Math.min(7, Number(content.querySelector('#h-times-per-week').value) || 1)) }
-        : { type: 'daily' };
+    let frequency = { type: 'daily' };
+    if (frequencyType === 'weekly') {
+      frequency = { type: 'weekly', timesPerWeek: Math.max(1, Math.min(7, Number(content.querySelector('#h-times-per-week').value) || 1)) };
+    } else if (frequencyType === 'monthly') {
+      frequency = { type: 'monthly', timesPerMonth: Math.max(1, Math.min(30, Number(content.querySelector('#h-times-per-month').value) || 1)) };
+    }
     if (isEdit) {
       Object.assign(existingHabit, { name, trigger, frequency });
     } else {
-      state.habits.push({ id: uid(), goalId, name, trigger, frequency, createdAt: todayISO() });
+      state.habits.push({
+        id: uid(),
+        goalId: parent.goalId || null,
+        valueId: parent.goalId ? null : parent.valueId,
+        name,
+        trigger,
+        frequency,
+        status: 'active',
+        createdAt: todayISO(),
+      });
     }
     saveState(state);
     closeModal();
     renderApp(state);
   };
   if (isEdit) {
+    const completeBtn = content.querySelector('#h-complete');
+    if (completeBtn) {
+      completeBtn.onclick = () => {
+        existingHabit.status = 'completed';
+        existingHabit.completedAt = todayISO();
+        saveState(state);
+        closeModal();
+        renderApp(state);
+      };
+    }
     content.querySelector('#h-delete').onclick = () => {
       openConfirmModal('Delete this habit? This cannot be undone — its log history will be deleted too.', 'Delete', () => {
         deleteHabit(state, existingHabit.id);
@@ -881,6 +1126,30 @@ function openHabitModal(state, goalId, existingHabit) {
       });
     };
   }
+  openModal(content);
+}
+
+function openTodoModal(state, goalId) {
+  const content = el(`
+    <div class="modal-body">
+      <h2>New to-do</h2>
+      <label>What needs doing?</label>
+      <input type="text" id="t-title" placeholder="e.g. Sign up for the race" />
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="t-cancel">Cancel</button>
+        <button class="btn btn-primary" id="t-save">Save to-do</button>
+      </div>
+    </div>
+  `);
+  content.querySelector('#t-cancel').onclick = closeModal;
+  content.querySelector('#t-save').onclick = () => {
+    const title = content.querySelector('#t-title').value.trim();
+    if (!title) return;
+    state.todos.push({ id: uid(), goalId, title, status: 'active', createdAt: todayISO() });
+    saveState(state);
+    closeModal();
+    renderApp(state);
+  };
   openModal(content);
 }
 

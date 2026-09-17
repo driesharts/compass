@@ -83,7 +83,7 @@ function dayIndex(dateISO) {
 function dataAwarePrompts(state, dateISO) {
   const prompts = [];
   state.habits
-    .filter((h) => daysBetween(h.createdAt, dateISO) >= 7)
+    .filter((h) => h.status !== 'completed' && daysBetween(h.createdAt, dateISO) >= 7)
     .forEach((h) => {
       const { done } = consistency(state, h.id, dateISO, 7);
       const target = habitTarget(h, 7);
@@ -128,6 +128,7 @@ function defaultState() {
     values: [],
     goals: [],
     habits: [],
+    todos: [],
     logs: [],
     journal: [],
   };
@@ -155,19 +156,41 @@ function habitsForGoal(state, goalId) {
   return state.habits.filter((h) => h.goalId === goalId);
 }
 
+function directHabitsForValue(state, valueId) {
+  return state.habits.filter((h) => !h.goalId && h.valueId === valueId);
+}
+
+function habitsForValue(state, valueId) {
+  const goalIds = new Set(goalsForValue(state, valueId).map((g) => g.id));
+  return state.habits.filter((h) => (h.goalId && goalIds.has(h.goalId)) || (!h.goalId && h.valueId === valueId));
+}
+
 function goalsForValue(state, valueId) {
   return state.goals.filter((g) => g.valueId === valueId);
 }
 
+function todosForGoal(state, goalId) {
+  return state.todos.filter((t) => t.goalId === goalId);
+}
+
 function valueHasActiveHabit(state, valueId) {
-  const goalIds = new Set(goalsForValue(state, valueId).map((g) => g.id));
-  return state.habits.some((h) => goalIds.has(h.goalId));
+  return habitsForValue(state, valueId).some((h) => h.status !== 'completed');
+}
+
+function ownerValueId(state, item) {
+  if (item.valueId) return item.valueId;
+  if (item.goalId) {
+    const goal = state.goals.find((g) => g.id === item.goalId);
+    return goal ? goal.valueId : null;
+  }
+  return null;
 }
 
 function habitTarget(habit, windowSize) {
   const days = windowSize || 7;
-  if (habit && habit.frequency && habit.frequency.type === 'weekly') {
-    return Math.max(1, Math.round(habit.frequency.timesPerWeek * (days / 7)));
+  if (habit && habit.frequency) {
+    if (habit.frequency.type === 'weekly') return Math.max(1, Math.round(habit.frequency.timesPerWeek * (days / 7)));
+    if (habit.frequency.type === 'monthly') return Math.max(1, Math.round(habit.frequency.timesPerMonth * (days / 30)));
   }
   return days;
 }
@@ -177,13 +200,19 @@ function deleteHabit(state, habitId) {
   state.logs = state.logs.filter((l) => l.habitId !== habitId);
 }
 
+function deleteTodo(state, todoId) {
+  state.todos = state.todos.filter((t) => t.id !== todoId);
+}
+
 function deleteGoal(state, goalId) {
   state.habits.filter((h) => h.goalId === goalId).forEach((h) => deleteHabit(state, h.id));
+  state.todos.filter((t) => t.goalId === goalId).forEach((t) => deleteTodo(state, t.id));
   state.goals = state.goals.filter((g) => g.id !== goalId);
 }
 
 function deleteValue(state, valueId) {
   state.goals.filter((g) => g.valueId === valueId).forEach((g) => deleteGoal(state, g.id));
+  directHabitsForValue(state, valueId).forEach((h) => deleteHabit(state, h.id));
   state.values = state.values.filter((v) => v.id !== valueId);
 }
 
@@ -226,8 +255,7 @@ function daysBetween(fromISO, toISO) {
 
 function valueActivityCount(state, valueId, dateISO, windowSize) {
   const days = new Set(lastNDays(dateISO, windowSize || 30));
-  const goalIds = new Set(goalsForValue(state, valueId).map((g) => g.id));
-  const habitIds = state.habits.filter((h) => goalIds.has(h.goalId)).map((h) => h.id);
+  const habitIds = habitsForValue(state, valueId).map((h) => h.id);
   return state.logs.filter((l) => habitIds.includes(l.habitId) && days.has(l.date)).length;
 }
 

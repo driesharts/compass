@@ -237,10 +237,32 @@ textarea { min-height: 70px; resize: vertical; }
 }
 .btn-tiny:hover { color: var(--accent-dark); border-color: var(--accent); }
 
-.habit-sublist { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.habit-sublist, .todo-sublist { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
 .habit-sub-row { font-size: 13px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
-.habit-sub-info { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.habit-sub-info { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .habit-sub-row .habit-trigger { font-style: italic; }
+
+.direct-habit-list { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+.direct-habit-heading { margin: 0 0 2px; }
+
+.todo-toggle {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid var(--accent);
+  background: var(--surface);
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.todo-toggle:hover { transform: scale(1.1); }
+
+.goal-header-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+
+.today-group-heading { margin: 20px 0 10px; font-size: 15px; color: var(--accent-dark); }
+.today-group-heading:first-of-type { margin-top: 0; }
+
+.stat-group-heading { font-size: 13px; font-weight: 600; color: var(--accent-dark); margin: 14px 0 2px; }
+.stat-group-heading:first-of-type { margin-top: 0; }
 
 /* Journal */
 .journal-controls input[type="text"] { margin-bottom: 10px; }
