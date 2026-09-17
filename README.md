@@ -35,6 +35,7 @@ Instead, the **Motive** prompt category asks about a specific active goal using 
 - Logging a habit, completing a to-do or habit, achieving a goal, or deleting something surfaces a brief toast confirming it happened.
 - Pinch/double-tap zoom is disabled and inputs use a 16px font so tapping into a field doesn't trigger iOS's auto-zoom — this is meant to feel like a fixed-layout app, not a zoomable web page. Focus rings and the mobile tap-highlight flash use the app's green accent instead of the browser default blue.
 - Mobile Safari auto-detects dates/phone numbers in plain text and turns them into blue tappable links — since the app shows dates everywhere (target dates, journal entries, completion dates), a `format-detection` meta tag turns that off, with a CSS fallback in case a given OS version still does it anyway.
+- `button`/`input`/`select`/`textarea` explicitly inherit the page's text color. Safari gives form controls their own default color tied to the system tint (blue) instead of inheriting like every other element does — invisible on desktop Chrome, but it turned the value/goal card buttons' text blue on an iPhone.
 - The page scrollbar is hidden (scrolling itself still works) to keep the home-screen-app feel.
 
 ## Deferred to a later version

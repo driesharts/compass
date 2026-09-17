@@ -48,6 +48,17 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+/* Safari/WebKit gives <button> (and other form controls) their own default
+   text color tied to the system tint (blue) instead of inheriting the
+   page's color like every other element -- this is what was making the
+   value/goal card buttons render blue on iPhone even though nothing here
+   sets blue anywhere. Desktop Chrome doesn't do this, which is why it only
+   showed up on a phone. */
+button, input, select, textarea {
+  color: inherit;
+  font-family: inherit;
+}
+
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Belt-and-suspenders: some mobile browsers still auto-link things like
