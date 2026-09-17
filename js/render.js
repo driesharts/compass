@@ -586,11 +586,15 @@ function renderGoalDetail(state, goalId) {
 
   const actionsRow = el(`
     <div class="actions-row">
+      <button class="btn btn-small" data-action="add-habit">+ Habit</button>
+      <button class="btn btn-small" data-action="add-todo">+ To-do</button>
       ${!achieved ? '<button class="btn btn-small" data-action="achieve">Mark as achieved</button>' : ''}
       <button class="btn btn-small" data-action="edit-goal">Edit</button>
       <button class="btn btn-small" data-action="delete-goal">Delete</button>
     </div>
   `);
+  actionsRow.querySelector('[data-action="add-habit"]').onclick = () => openHabitModal(state, goal.valueId, null, goal.id);
+  actionsRow.querySelector('[data-action="add-todo"]').onclick = () => openTodoModal(state, goal.valueId, goal.id);
   const achieveBtn = actionsRow.querySelector('[data-action="achieve"]');
   if (achieveBtn) {
     achieveBtn.onclick = () => {
@@ -1319,13 +1323,13 @@ function openGoalModal(state, valueId, existingGoal) {
   openModal(content);
 }
 
-function openHabitModal(state, valueId, existingHabit) {
+function openHabitModal(state, valueId, existingHabit, presetGoalId) {
   const isEdit = !!existingHabit;
   const freqType = isEdit && existingHabit.frequency ? existingHabit.frequency.type : 'daily';
   const timesPerWeek = freqType === 'weekly' ? existingHabit.frequency.timesPerWeek : 2;
   const timesPerMonth = freqType === 'monthly' ? existingHabit.frequency.timesPerMonth : 2;
   const valueGoals = goalsForValue(state, valueId).filter((g) => g.status !== 'achieved');
-  let selectedGoalId = isEdit ? existingHabit.goalId || null : null;
+  let selectedGoalId = isEdit ? existingHabit.goalId || null : presetGoalId || null;
 
   const content = el(`
     <div class="modal-body">
@@ -1443,9 +1447,9 @@ function openHabitModal(state, valueId, existingHabit) {
   openModal(content);
 }
 
-function openTodoModal(state, valueId) {
+function openTodoModal(state, valueId, presetGoalId) {
   const valueGoals = goalsForValue(state, valueId).filter((g) => g.status !== 'achieved');
-  let selectedGoalId = null;
+  let selectedGoalId = presetGoalId || null;
 
   const content = el(`
     <div class="modal-body">
@@ -1457,8 +1461,8 @@ function openTodoModal(state, valueId) {
           ? `
         <label class="small muted">Tag to a goal <span class="muted">(optional)</span></label>
         <div class="filter-chips" id="t-goal-chips">
-          <button type="button" class="filter-chip active" data-goal="">No tag</button>
-          ${valueGoals.map((g) => `<button type="button" class="filter-chip" data-goal="${g.id}">${escapeHtml(g.title)}</button>`).join('')}
+          <button type="button" class="filter-chip ${!selectedGoalId ? 'active' : ''}" data-goal="">No tag</button>
+          ${valueGoals.map((g) => `<button type="button" class="filter-chip ${g.id === selectedGoalId ? 'active' : ''}" data-goal="${g.id}">${escapeHtml(g.title)}</button>`).join('')}
         </div>
       `
           : ''
