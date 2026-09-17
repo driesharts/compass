@@ -350,25 +350,33 @@ function renderToday(state) {
     return row;
   }
 
-  const groups = new Map();
-  const groupFor = (valueId) => {
-    const key = valueId || '_other';
-    if (!groups.has(key)) groups.set(key, { habits: [], todos: [] });
-    return groups.get(key);
-  };
-  activeHabits.forEach((h) => groupFor(ownerValueId(state, h)).habits.push(h));
-  activeTodos.forEach((t) => groupFor(ownerValueId(state, t)).todos.push(t));
+  if (activeTodos.length > 0) {
+    wrap.appendChild(el(`<h2 class="today-section-heading">To-dos</h2>`));
+    const todoList = el(`<div class="habit-list"></div>`);
+    activeTodos.forEach((t) => todoList.appendChild(renderTodoCard(t)));
+    wrap.appendChild(todoList);
+  }
 
-  const orderedKeys = [...state.values.map((v) => v.id), '_other'].filter((k) => groups.has(k));
-  orderedKeys.forEach((key) => {
-    const value = state.values.find((v) => v.id === key);
-    const group = groups.get(key);
-    wrap.appendChild(el(`<h2 class="today-group-heading">${escapeHtml(value ? value.name : 'Other')}</h2>`));
-    const list = el(`<div class="habit-list"></div>`);
-    group.habits.forEach((h) => list.appendChild(renderHabitCard(h)));
-    group.todos.forEach((t) => list.appendChild(renderTodoCard(t)));
-    wrap.appendChild(list);
-  });
+  if (activeHabits.length > 0) {
+    wrap.appendChild(el(`<h2 class="today-section-heading">Habits</h2>`));
+    const groups = new Map();
+    const groupFor = (valueId) => {
+      const key = valueId || '_other';
+      if (!groups.has(key)) groups.set(key, []);
+      return groups.get(key);
+    };
+    activeHabits.forEach((h) => groupFor(ownerValueId(state, h)).push(h));
+
+    const orderedKeys = [...state.values.map((v) => v.id), '_other'].filter((k) => groups.has(k));
+    orderedKeys.forEach((key) => {
+      const value = state.values.find((v) => v.id === key);
+      const group = groups.get(key);
+      wrap.appendChild(el(`<h3 class="today-group-heading">${escapeHtml(value ? value.name : 'Other')}</h3>`));
+      const list = el(`<div class="habit-list"></div>`);
+      group.forEach((h) => list.appendChild(renderHabitCard(h)));
+      wrap.appendChild(list);
+    });
+  }
 
   return wrap;
 }
