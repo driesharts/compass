@@ -484,19 +484,39 @@ function renderValuesGoals(state) {
   visibleValues.forEach((v) => {
     const goals = goalsForValue(state, v.id).filter((g) => g.status !== 'achieved');
     const directHabits = directHabitsForValue(state, v.id).filter((h) => h.status !== 'completed');
+    const totalHabits =
+      directHabits.length + goals.reduce((sum, g) => sum + habitsForGoal(state, g.id).filter((h) => h.status !== 'completed').length, 0);
+    const totalTodos = goals.reduce((sum, g) => sum + todosForGoal(state, g.id).filter((t) => t.status !== 'done').length, 0);
+    const summaryParts = [`${goals.length} goal${goals.length === 1 ? '' : 's'}`, `${totalHabits} habit${totalHabits === 1 ? '' : 's'}`];
+    if (totalTodos > 0) summaryParts.push(`${totalTodos} to-do${totalTodos === 1 ? '' : 's'}`);
+    const expanded = !!(state._expandedValues && state._expandedValues[v.id]);
+
     const card = el(`
       <div class="card value-card">
-        <h2>${escapeHtml(v.name)}</h2>
-        ${v.note ? `<p class="muted">${escapeHtml(v.note)}</p>` : ''}
-        <div class="actions-row">
-          <button class="btn btn-small" data-action="edit-value">Edit</button>
-          <button class="btn btn-small" data-action="add-goal">+ Goal</button>
-          <button class="btn btn-small" data-action="add-direct-habit">+ Habit</button>
+        <div class="value-summary-header" data-action="toggle-value">
+          <h2>${escapeHtml(v.name)}</h2>
+          <span class="value-toggle-caret">${expanded ? '▾' : '▸'}</span>
         </div>
-        <div class="goal-list"></div>
-        <div class="direct-habit-list"></div>
+        ${!expanded ? `<p class="muted small value-summary-count">${summaryParts.join(' · ')}</p>` : ''}
+        <div class="value-expanded" style="${expanded ? '' : 'display:none;'}">
+          ${v.note ? `<p class="muted">${escapeHtml(v.note)}</p>` : ''}
+          <div class="actions-row">
+            <button class="btn btn-small" data-action="edit-value">Edit</button>
+            <button class="btn btn-small" data-action="add-goal">+ Goal</button>
+            <button class="btn btn-small" data-action="add-direct-habit">+ Habit</button>
+          </div>
+          <div class="goal-list"></div>
+          <div class="direct-habit-list"></div>
+        </div>
       </div>
     `);
+    card.querySelector('[data-action="toggle-value"]').onclick = () => {
+      state._expandedValues = state._expandedValues || {};
+      if (expanded) delete state._expandedValues[v.id];
+      else state._expandedValues[v.id] = true;
+      saveState(state);
+      renderApp(state);
+    };
     card.querySelector('[data-action="add-goal"]').onclick = () => openGoalModal(state, v.id);
     card.querySelector('[data-action="edit-value"]').onclick = () => openValueModal(state, v);
     card.querySelector('[data-action="add-direct-habit"]').onclick = () => openHabitModal(state, { valueId: v.id });

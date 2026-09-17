@@ -210,6 +210,11 @@ textarea { min-height: 70px; resize: vertical; }
 .empty-state { text-align: center; padding: 40px 16px; color: var(--muted); }
 
 /* Values & Goals */
+.value-summary-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; user-select: none; }
+.value-summary-header h2 { margin: 0; }
+.value-toggle-caret { font-size: 13px; color: var(--muted); flex-shrink: 0; }
+.value-summary-count { margin: 4px 0 0; }
+.value-expanded { margin-top: 0; }
 .actions-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .goal-list { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
 .goal-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
