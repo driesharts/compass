@@ -804,12 +804,17 @@ function renderJournal(state) {
     update();
   }
 
+  const JOURNAL_RECENT_COUNT = 10;
+
   function update() {
     const searchLower = filter.search.trim().toLowerCase();
-    const entries = [...state.journal]
+    const allEntries = [...state.journal]
       .filter(matchesFilter)
       .filter((e) => !searchLower || (e.text || '').toLowerCase().includes(searchLower) || (e.prompt || '').toLowerCase().includes(searchLower))
       .sort((a, b) => (a.date < b.date ? 1 : -1));
+
+    const expanded = !!state._journalExpanded;
+    const entries = expanded ? allEntries : allEntries.slice(0, JOURNAL_RECENT_COUNT);
 
     listContainer.innerHTML = '';
     if (entries.length === 0) {
@@ -843,6 +848,18 @@ function renderJournal(state) {
       entryEl.querySelector('[data-action="edit-entry"]').onclick = () => openJournalEntryModal(state, e);
       listContainer.appendChild(entryEl);
     });
+
+    if (allEntries.length > JOURNAL_RECENT_COUNT) {
+      const toggleBtn = el(
+        `<button class="btn btn-tiny" style="margin-top:4px;">${expanded ? 'Show recent only' : `Show all (${allEntries.length})`}</button>`
+      );
+      toggleBtn.onclick = () => {
+        state._journalExpanded = !expanded;
+        saveState(state);
+        update();
+      };
+      listContainer.appendChild(toggleBtn);
+    }
   }
 
   controls.querySelector('#journal-search').addEventListener('input', (e) => {
