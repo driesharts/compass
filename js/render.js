@@ -45,35 +45,6 @@ function consistencyDots(state, habitId, dateISO, windowSize, label) {
   return `<div class="consistency"><div class="${wrapClass}">${dots}</div><span class="consistency-label">${done}/${target} ${label || 'this week'}</span></div>`;
 }
 
-function buildClaudePrompt(state, goal) {
-  const value = state.values.find((v) => v.id === goal.valueId);
-  const habits = habitsForGoal(state, goal.id);
-
-  const lines = [];
-  lines.push("I'd like research-grounded feedback on a personal goal from my habit-tracking app.");
-  lines.push('');
-  lines.push(`Goal: ${goal.title}`);
-  if (value) lines.push(`Value it serves: ${value.name}`);
-  if (goal.why) lines.push(`Why it matters to me: ${goal.why}`);
-  if (goal.targetDate) lines.push(`Target date: ${goal.targetDate}`);
-  if (goal.notes) lines.push(`Notes: ${goal.notes}`);
-  if (habits.length) {
-    lines.push('');
-    lines.push('Habits toward it:');
-    habits.forEach((h) => {
-      lines.push(`- ${h.name}${h.trigger ? ` (trigger: ${h.trigger})` : ''}`);
-    });
-  }
-  lines.push('');
-  lines.push("Questions I'd like help with:");
-  lines.push('1. Is this goal well-formed (specific, realistic, well-scoped for me)?');
-  lines.push('2. Is there real research on the best approach for this kind of goal that I should know about?');
-  lines.push('3. Is there anything about how I’ve set this up that seems off or worth reconsidering?');
-  lines.push('');
-  lines.push('(Note: if this touches health/medical/financial decisions, treat this as informational, not professional advice.)');
-  return lines.join('\n');
-}
-
 function monthLabel(dateISO) {
   const [y, m] = dateISO.split('-').map(Number);
   return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
@@ -328,7 +299,8 @@ function renderToday(state) {
   }
 
   function renderTodoCard(t) {
-    const goal = state.goals.find((g) => g.id === t.goalId);
+    const goal = t.goalId ? state.goals.find((g) => g.id === t.goalId) : null;
+    const value = !t.goalId ? state.values.find((v) => v.id === t.valueId) : null;
     const row = el(`
       <div class="card habit-row">
         <div class="habit-main">
@@ -336,6 +308,7 @@ function renderToday(state) {
           <div class="habit-text">
             <div class="habit-name">${escapeHtml(t.title)} <span class="chip chip--neutral">to-do</span></div>
             ${goal ? `<div class="habit-goal">→ ${escapeHtml(goal.title)}</div>` : ''}
+            ${value ? `<div class="habit-goal">→ ${escapeHtml(value.name)}</div>` : ''}
           </div>
         </div>
       </div>
@@ -351,7 +324,7 @@ function renderToday(state) {
   }
 
   if (activeTodos.length > 0) {
-    wrap.appendChild(el(`<h2 class="today-section-heading">To-dos</h2>`));
+    wrap.appendChild(el(`<h2 class="today-section-heading">To-do's</h2>`));
     const todoList = el(`<div class="habit-list"></div>`);
     activeTodos.forEach((t) => todoList.appendChild(renderTodoCard(t)));
     wrap.appendChild(todoList);
@@ -517,9 +490,11 @@ function renderValuesGoals(state) {
   visibleValues.forEach((v) => {
     const goals = goalsForValue(state, v.id).filter((g) => g.status !== 'achieved');
     const directHabits = directHabitsForValue(state, v.id).filter((h) => h.status !== 'completed');
+    const directTodos = directTodosForValue(state, v.id).filter((t) => t.status !== 'done');
     const totalHabits =
       directHabits.length + goals.reduce((sum, g) => sum + habitsForGoal(state, g.id).filter((h) => h.status !== 'completed').length, 0);
-    const totalTodos = goals.reduce((sum, g) => sum + todosForGoal(state, g.id).filter((t) => t.status !== 'done').length, 0);
+    const totalTodos =
+      directTodos.length + goals.reduce((sum, g) => sum + todosForGoal(state, g.id).filter((t) => t.status !== 'done').length, 0);
     const summaryParts = [`${goals.length} goal${goals.length === 1 ? '' : 's'}`, `${totalHabits} habit${totalHabits === 1 ? '' : 's'}`];
     if (totalTodos > 0) summaryParts.push(`${totalTodos} to-do${totalTodos === 1 ? '' : 's'}`);
     const expanded = !!(state._expandedValues && state._expandedValues[v.id]);
@@ -537,9 +512,11 @@ function renderValuesGoals(state) {
             <button class="btn btn-small" data-action="edit-value">Edit</button>
             <button class="btn btn-small" data-action="add-goal">+ Goal</button>
             <button class="btn btn-small" data-action="add-direct-habit">+ Habit</button>
+            <button class="btn btn-small" data-action="add-direct-todo">+ To-do</button>
           </div>
           <div class="goal-list"></div>
           <div class="direct-habit-list"></div>
+          <div class="direct-todo-list"></div>
         </div>
       </div>
     `);
@@ -553,6 +530,7 @@ function renderValuesGoals(state) {
     card.querySelector('[data-action="add-goal"]').onclick = () => openGoalModal(state, v.id);
     card.querySelector('[data-action="edit-value"]').onclick = () => openValueModal(state, v);
     card.querySelector('[data-action="add-direct-habit"]').onclick = () => openHabitModal(state, { valueId: v.id });
+    card.querySelector('[data-action="add-direct-todo"]').onclick = () => openTodoModal(state, { valueId: v.id });
 
     const goalList = card.querySelector('.goal-list');
     if (goals.length === 0) {
@@ -569,7 +547,6 @@ function renderValuesGoals(state) {
           ${g.notes ? `<div class="goal-notes">${escapeHtml(g.notes)}</div>` : ''}
           <div class="actions-row">
             <button class="btn btn-small" data-action="edit-goal">Edit</button>
-            <button class="btn btn-small" data-action="copy-claude">Copy for Claude</button>
             <button class="btn btn-small" data-action="add-habit">+ Habit</button>
             <button class="btn btn-small" data-action="add-todo">+ To-do</button>
           </div>
@@ -578,24 +555,8 @@ function renderValuesGoals(state) {
         </div>
       `);
       goalEl.querySelector('[data-action="add-habit"]').onclick = () => openHabitModal(state, { goalId: g.id });
-      goalEl.querySelector('[data-action="add-todo"]').onclick = () => openTodoModal(state, g.id);
+      goalEl.querySelector('[data-action="add-todo"]').onclick = () => openTodoModal(state, { goalId: g.id });
       goalEl.querySelector('[data-action="edit-goal"]').onclick = () => openGoalModal(state, v.id, g);
-      const copyBtn = goalEl.querySelector('[data-action="copy-claude"]');
-      copyBtn.onclick = () => {
-        const text = buildClaudePrompt(state, g);
-        navigator.clipboard
-          .writeText(text)
-          .then(() => {
-            const original = copyBtn.textContent;
-            copyBtn.textContent = 'Copied!';
-            setTimeout(() => {
-              copyBtn.textContent = original;
-            }, 1500);
-          })
-          .catch(() => {
-            openMessageModal('Could not copy automatically. Here is the text:\n\n' + text);
-          });
-      };
       const sub = goalEl.querySelector('.habit-sublist');
       if (habits.length === 0) {
         sub.appendChild(el(`<p class="muted small">No habits yet.</p>`));
@@ -612,6 +573,12 @@ function renderValuesGoals(state) {
     if (directHabits.length > 0) {
       directList.appendChild(el(`<p class="muted small direct-habit-heading">Ongoing habits (not tied to a specific goal)</p>`));
       directHabits.forEach((h) => directList.appendChild(renderHabitRow(h, { valueId: v.id })));
+    }
+
+    const directTodoList = card.querySelector('.direct-todo-list');
+    if (directTodos.length > 0) {
+      directTodoList.appendChild(el(`<p class="muted small direct-habit-heading">To-dos (not tied to a specific goal)</p>`));
+      directTodos.forEach((t) => directTodoList.appendChild(renderTodoRow(t)));
     }
 
     wrap.appendChild(card);
@@ -836,8 +803,9 @@ function renderHistory(state) {
         todosForGoal(state, g.id).some((t) => t.status === 'done')
     );
     const directCompletedHabits = directHabitsForValue(state, v.id).filter((h) => h.status === 'completed');
+    const directDoneTodos = directTodosForValue(state, v.id).filter((t) => t.status === 'done');
 
-    if (relevantGoals.length === 0 && directCompletedHabits.length === 0) return;
+    if (relevantGoals.length === 0 && directCompletedHabits.length === 0 && directDoneTodos.length === 0) return;
     anySection = true;
 
     const card = el(`
@@ -845,6 +813,7 @@ function renderHistory(state) {
         <h2>${escapeHtml(v.name)}</h2>
         <div class="goal-list"></div>
         <div class="direct-habit-list"></div>
+        <div class="direct-todo-list"></div>
       </div>
     `);
     const goalList = card.querySelector('.goal-list');
@@ -901,6 +870,23 @@ function renderHistory(state) {
               deleteHabit(state, h.id);
               saveState(state);
               showToast('Habit deleted permanently');
+              renderApp(state);
+            });
+          })
+        );
+      });
+    }
+
+    const directTodoList = card.querySelector('.direct-todo-list');
+    if (directDoneTodos.length > 0) {
+      directTodoList.appendChild(el(`<p class="muted small direct-habit-heading">Completed to-dos</p>`));
+      directDoneTodos.forEach((t) => {
+        directTodoList.appendChild(
+          historyRow(t.title, 'to-do', t.completedAt, () => {
+            openConfirmModal('Delete this to-do permanently?', 'Delete', () => {
+              deleteTodo(state, t.id);
+              saveState(state);
+              showToast('To-do deleted permanently');
               renderApp(state);
             });
           })
@@ -1249,7 +1235,7 @@ function openHabitModal(state, parent, existingHabit) {
   openModal(content);
 }
 
-function openTodoModal(state, goalId) {
+function openTodoModal(state, parent) {
   const content = el(`
     <div class="modal-body">
       <h2>New to-do</h2>
@@ -1265,7 +1251,14 @@ function openTodoModal(state, goalId) {
   content.querySelector('#t-save').onclick = () => {
     const title = content.querySelector('#t-title').value.trim();
     if (!title) return;
-    state.todos.push({ id: uid(), goalId, title, status: 'active', createdAt: todayISO() });
+    state.todos.push({
+      id: uid(),
+      goalId: parent.goalId || null,
+      valueId: parent.goalId ? null : parent.valueId,
+      title,
+      status: 'active',
+      createdAt: todayISO(),
+    });
     saveState(state);
     closeModal();
     renderApp(state);

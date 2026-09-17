@@ -174,6 +174,10 @@ function todosForGoal(state, goalId) {
   return state.todos.filter((t) => t.goalId === goalId);
 }
 
+function directTodosForValue(state, valueId) {
+  return state.todos.filter((t) => !t.goalId && t.valueId === valueId);
+}
+
 function valueHasActiveHabit(state, valueId) {
   return habitsForValue(state, valueId).some((h) => h.status !== 'completed');
 }
@@ -214,6 +218,7 @@ function deleteGoal(state, goalId) {
 function deleteValue(state, valueId) {
   state.goals.filter((g) => g.valueId === valueId).forEach((g) => deleteGoal(state, g.id));
   directHabitsForValue(state, valueId).forEach((h) => deleteHabit(state, h.id));
+  directTodosForValue(state, valueId).forEach((t) => deleteTodo(state, t.id));
   state.values = state.values.filter((v) => v.id !== valueId);
 }
 
