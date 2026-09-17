@@ -141,12 +141,28 @@ function defaultState() {
   };
 }
 
+// Habits/to-dos used to be owned by a goal (goalId required). They're now
+// owned by a value (valueId required, goalId an optional tag). Back-fill
+// valueId from the goal for anything saved under the old shape; a no-op
+// once migrated, so it's safe to run on every load.
+function migrateToValueOwnedItems(state) {
+  [...state.habits, ...state.todos].forEach((item) => {
+    if (!item.valueId && item.goalId) {
+      const goal = state.goals.find((g) => g.id === item.goalId);
+      if (goal) item.valueId = goal.valueId;
+    }
+  });
+  return state;
+}
+
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaultState();
     const parsed = JSON.parse(raw);
-    return Object.assign(defaultState(), parsed);
+    const state = migrateToValueOwnedItems(Object.assign(defaultState(), parsed));
+    if (state._view === 'history') state._view = 'achievements';
+    return state;
   } catch (e) {
     console.error('Failed to load state, starting fresh', e);
     return defaultState();
@@ -164,8 +180,11 @@ function habitsForGoal(state, goalId) {
 }
 
 function habitsForValue(state, valueId) {
-  const goalIds = new Set(goalsForValue(state, valueId).map((g) => g.id));
-  return state.habits.filter((h) => goalIds.has(h.goalId));
+  return state.habits.filter((h) => h.valueId === valueId);
+}
+
+function todosForValue(state, valueId) {
+  return state.todos.filter((t) => t.valueId === valueId);
 }
 
 function goalsForValue(state, valueId) {
@@ -181,9 +200,14 @@ function valueHasActiveHabit(state, valueId) {
 }
 
 function ownerValueId(state, item) {
-  if (!item.goalId) return null;
-  const goal = state.goals.find((g) => g.id === item.goalId);
-  return goal ? goal.valueId : null;
+  return item.valueId || null;
+}
+
+const FREQUENCY_SORT_ORDER = { daily: 0, weekly: 1, monthly: 2 };
+
+function habitFrequencyRank(habit) {
+  const type = habit.frequency ? habit.frequency.type : 'daily';
+  return FREQUENCY_SORT_ORDER[type] !== undefined ? FREQUENCY_SORT_ORDER[type] : 0;
 }
 
 function habitTarget(habit, windowSize) {
@@ -204,9 +228,16 @@ function deleteTodo(state, todoId) {
   state.todos = state.todos.filter((t) => t.id !== todoId);
 }
 
+// Habits/to-dos and journal entries belong to the value, not the goal — a
+// goal is just an optional tag on them. Deleting a goal un-tags rather than
+// deletes anything that references it.
 function deleteGoal(state, goalId) {
-  state.habits.filter((h) => h.goalId === goalId).forEach((h) => deleteHabit(state, h.id));
-  state.todos.filter((t) => t.goalId === goalId).forEach((t) => deleteTodo(state, t.id));
+  state.habits.forEach((h) => {
+    if (h.goalId === goalId) h.goalId = null;
+  });
+  state.todos.forEach((t) => {
+    if (t.goalId === goalId) t.goalId = null;
+  });
   state.journal.forEach((j) => {
     if (j.goalId === goalId) j.goalId = null;
   });
@@ -214,6 +245,8 @@ function deleteGoal(state, goalId) {
 }
 
 function deleteValue(state, valueId) {
+  habitsForValue(state, valueId).forEach((h) => deleteHabit(state, h.id));
+  todosForValue(state, valueId).forEach((t) => deleteTodo(state, t.id));
   state.goals.filter((g) => g.valueId === valueId).forEach((g) => deleteGoal(state, g.id));
   state.values = state.values.filter((v) => v.id !== valueId);
 }
@@ -259,10 +292,23 @@ function daysBetween(fromISO, toISO) {
   return Math.round((b - a) / 86400000);
 }
 
-function valueActivityCount(state, valueId, dateISO, windowSize) {
+// Percent of this value's own achievable check-ins over the window — e.g. a
+// daily habit logged 6 of the last 7 days scores ~85% on its own, regardless
+// of how many habits other values have. Returns null when there's nothing
+// active to measure (caller shows a "no active habit yet" note instead).
+function valueAttentionPercent(state, valueId, dateISO, windowSize) {
+  const habits = habitsForValue(state, valueId).filter((h) => h.status !== 'completed');
+  if (habits.length === 0) return null;
   const days = new Set(lastNDays(dateISO, windowSize || 30));
-  const habitIds = habitsForValue(state, valueId).map((h) => h.id);
-  return state.logs.filter((l) => habitIds.includes(l.habitId) && days.has(l.date)).length;
+  const habitIds = new Set(habits.map((h) => h.id));
+  const actual = state.logs.filter((l) => habitIds.has(l.habitId) && days.has(l.date)).length;
+  const possible = habits.reduce((sum, h) => sum + habitTarget(h, windowSize || 30), 0);
+  return possible > 0 ? Math.round((actual / possible) * 100) : null;
+}
+
+function habitLogCountForValue(state, valueId) {
+  const habitIds = new Set(habitsForValue(state, valueId).map((h) => h.id));
+  return state.logs.filter((l) => habitIds.has(l.habitId)).length;
 }
 
 function journalCountInRange(state, dateISO, windowSize) {

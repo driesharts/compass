@@ -257,7 +257,10 @@ textarea { min-height: 70px; resize: vertical; }
 
 .habit-name { font-weight: 600; font-size: 14px; }
 .habit-trigger { font-size: 12px; color: var(--muted); }
-.habit-goal { font-size: 12px; color: var(--accent-dark); }
+
+.habit-row-end { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.habit-row--done { background: var(--intrinsic-bg); border-color: var(--intrinsic); }
+.habit-row--done .habit-name { font-weight: 500; }
 
 .consistency { display: flex; align-items: center; gap: 8px; }
 .dots { display: flex; gap: 3px; }
@@ -267,27 +270,52 @@ textarea { min-height: 70px; resize: vertical; }
 
 .empty-state { text-align: center; padding: 40px 16px; color: var(--muted); }
 
-/* Values & Goals */
-.values-toolbar { display: flex; justify-content: flex-end; margin: 0 0 4px; }
-.value-summary-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; user-select: none; }
-.value-summary-header h2 { margin: 0; }
-.value-toggle-caret {
-  font-size: 20px;
-  color: var(--muted);
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
+/* Values index */
+.value-index-grid { display: grid; gap: 12px; }
+.value-index-card {
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+  transition: border-color 0.15s ease;
 }
-.value-summary-header:hover .value-toggle-caret { background: var(--bg); color: var(--text); }
+.value-index-card:hover { border-color: var(--accent); }
 .value-summary-count { margin: 4px 0 0; }
-.value-expanded { margin-top: 0; }
+
+/* Detail pages (Value / Goal) */
+.back-link {
+  background: none;
+  border: none;
+  color: var(--accent-dark);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 8px;
+  display: inline-block;
+  font-family: inherit;
+}
+.back-link:hover { text-decoration: underline; }
+
+.section-heading { margin: 28px 0 10px; font-size: 20px; font-weight: 700; }
+.section-heading:first-of-type { margin-top: 8px; }
+
+.goal-detail-header { margin-bottom: 4px; }
+.goal-detail-header h1 { margin-bottom: 4px; }
+
 .actions-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .goal-list { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
 .goal-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+.goal-card--link {
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+  transition: border-color 0.15s ease;
+}
+.goal-card--link:hover { border-color: var(--accent); }
 .goal-title { font-weight: 600; font-size: 15px; }
 .goal-date { font-size: 12px; color: var(--muted); }
 .goal-date--overdue { color: var(--danger); font-style: italic; }
@@ -297,8 +325,6 @@ textarea { min-height: 70px; resize: vertical; }
 .chip { font-size: 11px; padding: 3px 8px; border-radius: 999px; }
 .chip--achieved { background: var(--intrinsic-bg); color: var(--intrinsic-text); font-weight: 600; }
 .chip--neutral { background: var(--border); color: var(--muted); font-weight: 500; }
-
-.goal-card--achieved { opacity: 0.8; }
 
 .btn-tiny {
   background: var(--surface);
@@ -332,9 +358,6 @@ textarea { min-height: 70px; resize: vertical; }
 .todo-toggle:hover { transform: scale(1.1); }
 
 .goal-header-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
-
-.today-section-heading { margin: 28px 0 4px; font-size: 20px; font-weight: 700; }
-.today-section-heading:first-of-type { margin-top: 8px; }
 
 .today-group-heading { margin: 20px 0 10px; font-size: 15px; color: var(--accent-dark); }
 .today-group-heading:first-of-type { margin-top: 0; }
@@ -381,7 +404,7 @@ textarea { min-height: 70px; resize: vertical; }
 .bar-row { display: grid; grid-template-columns: 90px 1fr 24px; align-items: center; gap: 10px; font-size: 13px; }
 .bar-label { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bar-track { background: var(--bg); border-radius: 999px; height: 10px; overflow: hidden; }
-.bar-fill { height: 100%; border-radius: 999px; }
+.bar-fill { height: 100%; border-radius: 999px; background: var(--accent); }
 .bar-value { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
 .bar-row--empty { grid-template-columns: 90px 1fr; }
 .bar-empty-note { color: var(--muted); font-size: 12px; font-style: italic; }

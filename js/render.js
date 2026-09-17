@@ -50,13 +50,13 @@ function monthLabel(dateISO) {
   return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 }
 
-function barRow(label, value, max, colorVar) {
-  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
+function percentBar(label, percent) {
+  const clamped = Math.max(0, Math.min(100, percent));
   return `
     <div class="bar-row">
       <span class="bar-label">${escapeHtml(label)}</span>
-      <div class="bar-track"><div class="bar-fill" style="width:${pct}%; background:var(${colorVar || '--accent'})"></div></div>
-      <span class="bar-value">${value}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${clamped}%"></div></div>
+      <span class="bar-value">${percent}%</span>
     </div>
   `;
 }
@@ -75,7 +75,107 @@ function applyTheme(state) {
   if (meta) meta.setAttribute('content', isDark ? '#1e1c18' : '#f6f4ef');
 }
 
+function goalTagLabel(state, item) {
+  if (!item.goalId) return '';
+  const goal = state.goals.find((g) => g.id === item.goalId);
+  return goal ? `<span class="chip chip--neutral">→ ${escapeHtml(goal.title)}</span>` : '';
+}
+
+function backLinkEl(label, onClick) {
+  const link = el(`<button type="button" class="back-link">${escapeHtml(label)}</button>`);
+  link.onclick = onClick;
+  return link;
+}
+
+// ---------- Navigation ----------
+
+function goToValuesIndex(state) {
+  state._view = 'values';
+  renderApp(state);
+}
+
+function goToValue(state, valueId) {
+  state._view = 'value-detail';
+  state._currentValueId = valueId;
+  renderApp(state);
+}
+
+function goToGoal(state, goalId, valueId) {
+  state._view = 'goal-detail';
+  state._currentGoalId = goalId;
+  state._currentValueId = valueId;
+  renderApp(state);
+}
+
+// ---------- Shared row renderers (Value detail + Goal detail) ----------
+
+function renderValueHabitRow(state, h) {
+  const date = todayISO();
+  const logged = isLoggedOn(state, h.id, date);
+  const row = el(`
+    <div class="card habit-row">
+      <div class="habit-main">
+        <button class="log-toggle ${logged ? 'logged' : ''}" title="Mark done for today">${logged ? '✓' : ''}</button>
+        <div class="habit-text">
+          <div class="habit-name">${escapeHtml(h.name)} ${frequencyLabel(h) ? `<span class="chip chip--neutral">${frequencyLabel(h)}</span>` : ''} ${goalTagLabel(state, h)}</div>
+          ${h.trigger ? `<div class="habit-trigger">${escapeHtml(h.trigger)}</div>` : ''}
+        </div>
+      </div>
+      <div class="habit-row-end">
+        ${consistencyDots(state, h.id, date)}
+        <button class="btn btn-tiny" data-action="edit">Edit</button>
+      </div>
+    </div>
+  `);
+  row.querySelector('.log-toggle').onclick = () => {
+    if (isLoggedOn(state, h.id, date)) {
+      state.logs = state.logs.filter((l) => !(l.habitId === h.id && l.date === date));
+      saveState(state);
+      showToast('Unlogged');
+    } else {
+      state.logs.push({ id: uid(), habitId: h.id, date });
+      saveState(state);
+      showToast(`Logged "${h.name}"`);
+    }
+    renderApp(state);
+  };
+  row.querySelector('[data-action="edit"]').onclick = () => openHabitModal(state, h.valueId, h);
+  return row;
+}
+
+function renderValueTodoRow(state, t) {
+  const row = el(`
+    <div class="card habit-row">
+      <div class="habit-main">
+        <button class="todo-toggle" data-action="complete" title="Mark done"></button>
+        <div class="habit-text">
+          <div class="habit-name">${escapeHtml(t.title)} ${goalTagLabel(state, t)}</div>
+        </div>
+      </div>
+      <button class="btn btn-tiny" data-action="delete">Delete</button>
+    </div>
+  `);
+  row.querySelector('[data-action="complete"]').onclick = () => {
+    t.status = 'done';
+    t.completedAt = todayISO();
+    saveState(state);
+    showToast(`"${t.title}" marked done`);
+    renderApp(state);
+  };
+  row.querySelector('[data-action="delete"]').onclick = () => {
+    openConfirmModal('Delete this to-do? This cannot be undone.', 'Delete', () => {
+      deleteTodo(state, t.id);
+      saveState(state);
+      showToast('To-do deleted');
+      renderApp(state);
+    });
+  };
+  return row;
+}
+
 // ---------- Views ----------
+
+const KNOWN_VIEWS = ['today', 'values', 'value-detail', 'goal-detail', 'journal', 'stats', 'achievements', 'settings'];
 
 function renderApp(state) {
   const container = document.getElementById('app');
@@ -88,14 +188,17 @@ function renderApp(state) {
   }
   header.classList.remove('hidden');
   container.innerHTML = '';
-  const view = state._view || 'today';
-  document.querySelectorAll('.nav-tab').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
+  const view = KNOWN_VIEWS.includes(state._view) ? state._view : 'today';
+  const navHighlight = view === 'value-detail' || view === 'goal-detail' ? 'values' : view;
+  document.querySelectorAll('.nav-tab').forEach((b) => b.classList.toggle('active', b.dataset.view === navHighlight));
 
   if (view === 'today') container.appendChild(renderToday(state));
-  else if (view === 'values') container.appendChild(renderValuesGoals(state));
+  else if (view === 'values') container.appendChild(renderValuesIndex(state));
+  else if (view === 'value-detail') container.appendChild(renderValueDetail(state, state._currentValueId));
+  else if (view === 'goal-detail') container.appendChild(renderGoalDetail(state, state._currentGoalId));
   else if (view === 'journal') container.appendChild(renderJournal(state));
   else if (view === 'stats') container.appendChild(renderStats(state));
-  else if (view === 'history') container.appendChild(renderHistory(state));
+  else if (view === 'achievements') container.appendChild(renderAchievements(state));
   else if (view === 'settings') container.appendChild(renderSettings(state));
 }
 
@@ -274,112 +377,57 @@ function renderToday(state) {
   });
   wrap.appendChild(promptCard);
 
-  const activeHabits = state.habits.filter((h) => h.status !== 'completed');
-  const activeTodos = state.todos.filter((t) => t.status !== 'done');
-  if (activeHabits.length === 0 && activeTodos.length === 0) {
+  wrap.appendChild(el(`<h2 class="section-heading">Completed today</h2>`));
+
+  const loggedToday = state.logs.filter((l) => l.date === date);
+  const habitsCompletedToday = loggedToday.map((l) => state.habits.find((h) => h.id === l.habitId)).filter(Boolean);
+  const todosCompletedToday = state.todos.filter((t) => t.status === 'done' && t.completedAt === date);
+
+  if (habitsCompletedToday.length === 0 && todosCompletedToday.length === 0) {
     wrap.appendChild(
       el(`
       <div class="empty-state">
-        <p>No habits yet.</p>
-        <button class="btn btn-primary" id="goto-values">Set up a value and goal</button>
+        <p>Nothing checked off yet today.</p>
+        <button class="btn btn-primary" id="goto-values">Go to your values</button>
       </div>
     `)
     );
-    wrap.querySelector('#goto-values').onclick = () => {
-      state._view = 'values';
-      renderApp(state);
-    };
+    wrap.querySelector('#goto-values').onclick = () => goToValuesIndex(state);
     return wrap;
   }
 
-  function renderHabitCard(h) {
-    const goal = state.goals.find((g) => g.id === h.goalId);
-    const logged = isLoggedOn(state, h.id, date);
-    const row = el(`
-      <div class="card habit-row">
-        <div class="habit-main">
-          <button class="log-toggle ${logged ? 'logged' : ''}" title="Mark done for today">${logged ? '✓' : ''}</button>
-          <div class="habit-text">
-            <div class="habit-name">${escapeHtml(h.name)}</div>
-            ${h.trigger ? `<div class="habit-trigger">${escapeHtml(h.trigger)}</div>` : ''}
-            ${goal ? `<div class="habit-goal">→ ${escapeHtml(goal.title)}</div>` : ''}
-          </div>
-        </div>
-        ${consistencyDots(state, h.id, date)}
-      </div>
-    `);
-    row.querySelector('.log-toggle').onclick = () => {
-      if (isLoggedOn(state, h.id, date)) {
-        state.logs = state.logs.filter((l) => !(l.habitId === h.id && l.date === date));
-        saveState(state);
-        showToast('Unlogged');
-      } else {
-        state.logs.push({ id: uid(), habitId: h.id, date });
-        saveState(state);
-        showToast(`Logged "${h.name}"`);
-      }
-      renderApp(state);
-    };
-    return row;
-  }
+  const groups = new Map();
+  const groupFor = (valueId) => {
+    const key = valueId || '_other';
+    if (!groups.has(key)) groups.set(key, { habits: [], todos: [] });
+    return groups.get(key);
+  };
+  habitsCompletedToday.forEach((h) => groupFor(h.valueId).habits.push(h));
+  todosCompletedToday.forEach((t) => groupFor(t.valueId).todos.push(t));
 
-  function renderTodoCard(t) {
-    const goal = state.goals.find((g) => g.id === t.goalId);
-    const row = el(`
-      <div class="card habit-row">
-        <div class="habit-main">
-          <button class="log-toggle" title="Mark done"></button>
-          <div class="habit-text">
-            <div class="habit-name">${escapeHtml(t.title)} <span class="chip chip--neutral">to-do</span></div>
-            ${goal ? `<div class="habit-goal">→ ${escapeHtml(goal.title)}</div>` : ''}
-          </div>
-        </div>
-      </div>
-    `);
-    row.querySelector('.log-toggle').onclick = () => {
-      t.status = 'done';
-      t.completedAt = todayISO();
-      saveState(state);
-      showToast(`"${t.title}" marked done`);
-      renderApp(state);
-    };
-    return row;
-  }
-
-  if (activeTodos.length > 0) {
-    wrap.appendChild(el(`<h2 class="today-section-heading">To-do's</h2>`));
-    const todoList = el(`<div class="habit-list"></div>`);
-    activeTodos.forEach((t) => todoList.appendChild(renderTodoCard(t)));
-    wrap.appendChild(todoList);
-  }
-
-  if (activeHabits.length > 0) {
-    wrap.appendChild(el(`<h2 class="today-section-heading">Habits</h2>`));
-    const groups = new Map();
-    const groupFor = (valueId) => {
-      const key = valueId || '_other';
-      if (!groups.has(key)) groups.set(key, []);
-      return groups.get(key);
-    };
-    activeHabits.forEach((h) => groupFor(ownerValueId(state, h)).push(h));
-
-    const orderedKeys = [...state.values.map((v) => v.id), '_other'].filter((k) => groups.has(k));
-    orderedKeys.forEach((key) => {
-      const value = state.values.find((v) => v.id === key);
-      const group = groups.get(key);
-      wrap.appendChild(el(`<h3 class="today-group-heading">${escapeHtml(value ? value.name : 'Other')}</h3>`));
-      const list = el(`<div class="habit-list"></div>`);
-      group.forEach((h) => list.appendChild(renderHabitCard(h)));
-      wrap.appendChild(list);
-    });
-  }
+  const orderedKeys = [...state.values.map((v) => v.id), '_other'].filter((k) => groups.has(k));
+  orderedKeys.forEach((key) => {
+    const value = state.values.find((v) => v.id === key);
+    const group = groups.get(key);
+    wrap.appendChild(el(`<h3 class="today-group-heading">${escapeHtml(value ? value.name : 'Other')}</h3>`));
+    const list = el(`<div class="habit-list"></div>`);
+    group.habits.forEach((h) =>
+      list.appendChild(el(`<div class="card habit-row habit-row--done"><span class="habit-name">✓ ${escapeHtml(h.name)}</span></div>`))
+    );
+    group.todos.forEach((t) =>
+      list.appendChild(
+        el(`<div class="card habit-row habit-row--done"><span class="habit-name">✓ ${escapeHtml(t.title)} <span class="chip chip--neutral">to-do</span></span></div>`)
+      )
+    );
+    wrap.appendChild(list);
+  });
 
   return wrap;
 }
 
-function renderValuesGoals(state) {
+function renderValuesIndex(state) {
   const wrap = el(`<div class="view"></div>`);
-  wrap.appendChild(el(`<h1>Values &amp; Goals</h1>`));
+  wrap.appendChild(el(`<h1>Values</h1>`));
 
   const existingNames = new Set(state.values.map((v) => v.name));
 
@@ -437,153 +485,231 @@ function renderValuesGoals(state) {
   renderAddValueCollapsed();
   wrap.appendChild(addValueCard);
 
-  const visibleValues = state.values;
-  if (visibleValues.length === 0) {
+  if (state.values.length === 0) {
     wrap.appendChild(el(`<div class="empty-state"><p>No values yet. Add one above to get started.</p></div>`));
     return wrap;
   }
 
-  if (visibleValues.length > 1) {
-    const allExpanded = visibleValues.every((v) => state._expandedValues && state._expandedValues[v.id]);
-    const toolbar = el(`
-      <div class="values-toolbar">
-        <button class="btn btn-tiny" id="toggle-all-values">${allExpanded ? 'Collapse all' : 'Expand all'}</button>
-      </div>
-    `);
-    toolbar.querySelector('#toggle-all-values').onclick = () => {
-      state._expandedValues = state._expandedValues || {};
-      visibleValues.forEach((v) => {
-        if (allExpanded) delete state._expandedValues[v.id];
-        else state._expandedValues[v.id] = true;
-      });
-      saveState(state);
-      renderApp(state);
-    };
-    wrap.appendChild(toolbar);
-  }
-
-  function renderHabitRow(habit, goalId) {
-    const habitRowEl = el(`
-      <div class="habit-sub-row">
-        <div class="habit-sub-main">
-          <div class="habit-sub-info">
-            <span class="habit-name">${escapeHtml(habit.name)}</span>
-            ${frequencyLabel(habit) ? `<span class="chip chip--neutral">${frequencyLabel(habit)}</span>` : ''}
-            ${habit.trigger ? `<span class="habit-trigger">${escapeHtml(habit.trigger)}</span>` : ''}
-          </div>
-          <button class="btn btn-tiny" data-action="edit-habit">Edit</button>
-        </div>
-        ${habit.notes ? `<div class="habit-sub-notes">${escapeHtml(habit.notes)}</div>` : ''}
-      </div>
-    `);
-    habitRowEl.querySelector('[data-action="edit-habit"]').onclick = () => openHabitModal(state, goalId, habit);
-    return habitRowEl;
-  }
-
-  function renderTodoRow(todo) {
-    const todoRowEl = el(`
-      <div class="habit-sub-row todo-row">
-        <div class="habit-sub-main">
-          <div class="habit-sub-info">
-            <button class="todo-toggle" data-action="complete-todo" title="Mark done"></button>
-            <span class="habit-name">${escapeHtml(todo.title)}</span>
-          </div>
-          <button class="btn btn-tiny" data-action="delete-todo">Delete</button>
-        </div>
-      </div>
-    `);
-    todoRowEl.querySelector('[data-action="complete-todo"]').onclick = () => {
-      todo.status = 'done';
-      todo.completedAt = todayISO();
-      saveState(state);
-      showToast(`"${todo.title}" marked done`);
-      renderApp(state);
-    };
-    todoRowEl.querySelector('[data-action="delete-todo"]').onclick = () => {
-      openConfirmModal('Delete this to-do? This cannot be undone.', 'Delete', () => {
-        deleteTodo(state, todo.id);
-        saveState(state);
-        showToast('To-do deleted');
-        renderApp(state);
-      });
-    };
-    return todoRowEl;
-  }
-
-  visibleValues.forEach((v) => {
+  const grid = el(`<div class="value-index-grid"></div>`);
+  state.values.forEach((v) => {
     const goals = goalsForValue(state, v.id).filter((g) => g.status !== 'achieved');
-    const totalHabits = goals.reduce((sum, g) => sum + habitsForGoal(state, g.id).filter((h) => h.status !== 'completed').length, 0);
-    const totalTodos = goals.reduce((sum, g) => sum + todosForGoal(state, g.id).filter((t) => t.status !== 'done').length, 0);
-    const summaryParts = [`${goals.length} goal${goals.length === 1 ? '' : 's'}`, `${totalHabits} habit${totalHabits === 1 ? '' : 's'}`];
-    if (totalTodos > 0) summaryParts.push(`${totalTodos} to-do${totalTodos === 1 ? '' : 's'}`);
-    const expanded = !!(state._expandedValues && state._expandedValues[v.id]);
-
+    const habits = habitsForValue(state, v.id).filter((h) => h.status !== 'completed');
+    const todos = todosForValue(state, v.id).filter((t) => t.status !== 'done');
+    const summary = [`${goals.length} goal${goals.length === 1 ? '' : 's'}`, `${habits.length} habit${habits.length === 1 ? '' : 's'}`];
+    if (todos.length > 0) summary.push(`${todos.length} to-do${todos.length === 1 ? '' : 's'}`);
     const card = el(`
-      <div class="card value-card">
-        <div class="value-summary-header" data-action="toggle-value">
-          <h2>${escapeHtml(v.name)}</h2>
-          <span class="value-toggle-caret">${expanded ? '▾' : '▸'}</span>
-        </div>
-        ${!expanded ? `<p class="muted small value-summary-count">${summaryParts.join(' · ')}</p>` : ''}
-        <div class="value-expanded" style="${expanded ? '' : 'display:none;'}">
-          ${v.note ? `<p class="muted">${escapeHtml(v.note)}</p>` : ''}
-          <div class="actions-row">
-            <button class="btn btn-small" data-action="edit-value">Edit</button>
-            <button class="btn btn-small" data-action="add-goal">+ Goal</button>
-          </div>
-          <div class="goal-list"></div>
-        </div>
-      </div>
+      <button type="button" class="card value-index-card">
+        <h2>${escapeHtml(v.name)}</h2>
+        ${v.note ? `<p class="muted small">${escapeHtml(v.note)}</p>` : ''}
+        <p class="muted small value-summary-count">${summary.join(' · ')}</p>
+      </button>
     `);
-    card.querySelector('[data-action="toggle-value"]').onclick = () => {
-      state._expandedValues = state._expandedValues || {};
-      if (expanded) delete state._expandedValues[v.id];
-      else state._expandedValues[v.id] = true;
-      saveState(state);
-      renderApp(state);
-    };
-    card.querySelector('[data-action="add-goal"]').onclick = () => openGoalModal(state, v.id);
-    card.querySelector('[data-action="edit-value"]').onclick = () => openValueModal(state, v);
+    card.onclick = () => goToValue(state, v.id);
+    grid.appendChild(card);
+  });
+  wrap.appendChild(grid);
 
-    const goalList = card.querySelector('.goal-list');
-    if (goals.length === 0) {
-      goalList.appendChild(el(`<p class="muted small">No goals under this value yet.</p>`));
-    }
+  return wrap;
+}
+
+function renderValueDetail(state, valueId) {
+  const value = state.values.find((v) => v.id === valueId);
+  const wrap = el(`<div class="view"></div>`);
+
+  if (!value) {
+    wrap.appendChild(backLinkEl('← All values', () => goToValuesIndex(state)));
+    wrap.appendChild(el(`<p class="muted">This value no longer exists.</p>`));
+    return wrap;
+  }
+
+  wrap.appendChild(backLinkEl('← All values', () => goToValuesIndex(state)));
+  wrap.appendChild(el(`<h1>${escapeHtml(value.name)}</h1>`));
+  if (value.note) wrap.appendChild(el(`<p class="muted">${escapeHtml(value.note)}</p>`));
+
+  const actionsRow = el(`
+    <div class="actions-row">
+      <button class="btn btn-small" data-action="edit-value">Edit</button>
+      <button class="btn btn-small" data-action="add-goal">+ Goal</button>
+      <button class="btn btn-small" data-action="add-habit">+ Habit</button>
+      <button class="btn btn-small" data-action="add-todo">+ To-do</button>
+    </div>
+  `);
+  actionsRow.querySelector('[data-action="edit-value"]').onclick = () => openValueModal(state, value);
+  actionsRow.querySelector('[data-action="add-goal"]').onclick = () => openGoalModal(state, value.id);
+  actionsRow.querySelector('[data-action="add-habit"]').onclick = () => openHabitModal(state, value.id);
+  actionsRow.querySelector('[data-action="add-todo"]').onclick = () => openTodoModal(state, value.id);
+  wrap.appendChild(actionsRow);
+
+  const goals = goalsForValue(state, value.id).filter((g) => g.status !== 'achieved');
+  wrap.appendChild(el(`<h2 class="section-heading">Goals</h2>`));
+  if (goals.length === 0) {
+    wrap.appendChild(el(`<p class="muted small">No goals yet.</p>`));
+  } else {
+    const goalList = el(`<div class="goal-list"></div>`);
     goals.forEach((g) => {
-      const habits = habitsForGoal(state, g.id).filter((h) => h.status !== 'completed');
-      const todos = todosForGoal(state, g.id).filter((t) => t.status !== 'done');
-      const goalEl = el(`
-        <div class="goal-card">
+      const card = el(`
+        <button type="button" class="goal-card goal-card--link">
           <div class="goal-title">${escapeHtml(g.title)}</div>
           ${targetDateInfo(g)}
           ${g.why ? `<div class="goal-why">${escapeHtml(g.why)}</div>` : ''}
-          ${g.notes ? `<div class="goal-notes">${escapeHtml(g.notes)}</div>` : ''}
-          <div class="actions-row">
-            <button class="btn btn-small" data-action="edit-goal">Edit</button>
-            <button class="btn btn-small" data-action="add-habit">+ Habit</button>
-            <button class="btn btn-small" data-action="add-todo">+ To-do</button>
+        </button>
+      `);
+      card.onclick = () => goToGoal(state, g.id, value.id);
+      goalList.appendChild(card);
+    });
+    wrap.appendChild(goalList);
+  }
+
+  const habits = habitsForValue(state, value.id)
+    .filter((h) => h.status !== 'completed')
+    .sort((a, b) => habitFrequencyRank(a) - habitFrequencyRank(b));
+  wrap.appendChild(el(`<h2 class="section-heading">Habits</h2>`));
+  if (habits.length === 0) {
+    wrap.appendChild(el(`<p class="muted small">No habits yet.</p>`));
+  } else {
+    const habitList = el(`<div class="habit-list"></div>`);
+    habits.forEach((h) => habitList.appendChild(renderValueHabitRow(state, h)));
+    wrap.appendChild(habitList);
+  }
+
+  const todos = todosForValue(state, value.id).filter((t) => t.status !== 'done');
+  wrap.appendChild(el(`<h2 class="section-heading">To-do's</h2>`));
+  if (todos.length === 0) {
+    wrap.appendChild(el(`<p class="muted small">No to-dos yet.</p>`));
+  } else {
+    const todoList = el(`<div class="habit-list"></div>`);
+    todos.forEach((t) => todoList.appendChild(renderValueTodoRow(state, t)));
+    wrap.appendChild(todoList);
+  }
+
+  return wrap;
+}
+
+function renderGoalDetail(state, goalId) {
+  const goal = state.goals.find((g) => g.id === goalId);
+  const wrap = el(`<div class="view"></div>`);
+
+  if (!goal) {
+    wrap.appendChild(backLinkEl('← All values', () => goToValuesIndex(state)));
+    wrap.appendChild(el(`<p class="muted">This goal no longer exists.</p>`));
+    return wrap;
+  }
+
+  const value = state.values.find((v) => v.id === goal.valueId);
+  wrap.appendChild(backLinkEl(`← ${value ? value.name : 'Back'}`, () => goToValue(state, goal.valueId)));
+
+  const achieved = goal.status === 'achieved';
+  wrap.appendChild(
+    el(`
+    <div class="goal-detail-header">
+      <h1>${escapeHtml(goal.title)} ${achieved ? '<span class="chip chip--achieved">✓ Achieved</span>' : ''}</h1>
+      ${targetDateInfo(goal)}
+    </div>
+  `)
+  );
+
+  const actionsRow = el(`
+    <div class="actions-row">
+      ${!achieved ? '<button class="btn btn-small" data-action="achieve">Mark as achieved</button>' : ''}
+      <button class="btn btn-small" data-action="edit-goal">Edit</button>
+      <button class="btn btn-small" data-action="delete-goal">Delete</button>
+    </div>
+  `);
+  const achieveBtn = actionsRow.querySelector('[data-action="achieve"]');
+  if (achieveBtn) {
+    achieveBtn.onclick = () => {
+      goal.status = 'achieved';
+      saveState(state);
+      showToast(`"${goal.title}" achieved`);
+      renderApp(state);
+    };
+  }
+  actionsRow.querySelector('[data-action="edit-goal"]').onclick = () => openGoalModal(state, goal.valueId, goal);
+  actionsRow.querySelector('[data-action="delete-goal"]').onclick = () => {
+    openConfirmModal('Delete this goal? Its habits and to-dos stay under the value, just un-tagged.', 'Delete', () => {
+      const valueId = goal.valueId;
+      deleteGoal(state, goal.id);
+      saveState(state);
+      showToast('Goal deleted');
+      goToValue(state, valueId);
+    });
+  };
+  wrap.appendChild(actionsRow);
+
+  if (goal.notes) wrap.appendChild(el(`<div class="goal-notes">${escapeHtml(goal.notes)}</div>`));
+
+  const relatedHabits = habitsForGoal(state, goal.id).filter((h) => h.status !== 'completed');
+  wrap.appendChild(el(`<h2 class="section-heading">Habits</h2>`));
+  if (relatedHabits.length === 0) {
+    wrap.appendChild(el(`<p class="muted small">No habits tagged to this goal yet.</p>`));
+  } else {
+    const list = el(`<div class="habit-list"></div>`);
+    relatedHabits.forEach((h) => list.appendChild(renderValueHabitRow(state, h)));
+    wrap.appendChild(list);
+  }
+
+  const relatedTodos = todosForGoal(state, goal.id).filter((t) => t.status !== 'done');
+  wrap.appendChild(el(`<h2 class="section-heading">To-do's</h2>`));
+  if (relatedTodos.length === 0) {
+    wrap.appendChild(el(`<p class="muted small">No to-dos tagged to this goal yet.</p>`));
+  } else {
+    const list = el(`<div class="habit-list"></div>`);
+    relatedTodos.forEach((t) => list.appendChild(renderValueTodoRow(state, t)));
+    wrap.appendChild(list);
+  }
+
+  wrap.appendChild(el(`<h2 class="section-heading">Journal</h2>`));
+  const composerCard = el(`
+    <div class="card">
+      <textarea id="goal-journal-text" placeholder="Write something about this goal..."></textarea>
+      <button class="btn btn-primary" id="goal-journal-save" style="margin-top:10px;">Add entry</button>
+    </div>
+  `);
+  composerCard.querySelector('#goal-journal-save').onclick = () => {
+    const ta = composerCard.querySelector('#goal-journal-text');
+    const text = ta.value.trim();
+    if (!text) return;
+    state.journal.push({ id: uid(), date: todayISO(), type: 'free', category: 'free', text, goalId: goal.id });
+    saveState(state);
+    showToast('Journal entry added');
+    renderApp(state);
+  };
+  wrap.appendChild(composerCard);
+
+  const goalEntries = state.journal.filter((j) => j.goalId === goal.id).sort((a, b) => (a.date < b.date ? 1 : -1));
+  if (goalEntries.length === 0) {
+    wrap.appendChild(el(`<p class="muted small">No journal entries for this goal yet.</p>`));
+  } else {
+    const entryList = el(`<div class="journal-list"></div>`);
+    goalEntries.forEach((e) => {
+      const entryEl = el(`
+        <div class="card journal-entry">
+          <div class="journal-entry-header">
+            <span class="journal-date">${escapeHtml(e.date)}</span>
+            <button class="btn btn-tiny" data-action="edit-entry">Edit</button>
           </div>
-          <div class="habit-sublist"></div>
-          <div class="todo-sublist"></div>
+          ${e.prompt ? `<div class="journal-prompt">${escapeHtml(e.prompt)}</div>` : ''}
+          <div class="journal-text">${escapeHtml(e.text)}</div>
         </div>
       `);
-      goalEl.querySelector('[data-action="add-habit"]').onclick = () => openHabitModal(state, g.id);
-      goalEl.querySelector('[data-action="add-todo"]').onclick = () => openTodoModal(state, g.id);
-      goalEl.querySelector('[data-action="edit-goal"]').onclick = () => openGoalModal(state, v.id, g);
-      const sub = goalEl.querySelector('.habit-sublist');
-      if (habits.length === 0) {
-        sub.appendChild(el(`<p class="muted small">No habits yet.</p>`));
-      }
-      habits.forEach((h) => sub.appendChild(renderHabitRow(h, g.id)));
-
-      const todoSub = goalEl.querySelector('.todo-sublist');
-      todos.forEach((t) => todoSub.appendChild(renderTodoRow(t)));
-
-      goalList.appendChild(goalEl);
+      entryEl.querySelector('[data-action="edit-entry"]').onclick = () => openJournalEntryModal(state, e);
+      entryList.appendChild(entryEl);
     });
+    wrap.appendChild(entryList);
+  }
 
-    wrap.appendChild(card);
+  wrap.appendChild(el(`<h2 class="section-heading">Why this matters</h2>`));
+  const whyCard = el(`
+    <div class="card">
+      <textarea id="goal-why" placeholder="Why do you want to achieve this?">${escapeHtml(goal.why || '')}</textarea>
+    </div>
+  `);
+  const whyTa = whyCard.querySelector('#goal-why');
+  whyTa.addEventListener('blur', () => {
+    goal.why = whyTa.value.trim();
+    saveState(state);
   });
+  wrap.appendChild(whyCard);
 
   return wrap;
 }
@@ -824,25 +950,22 @@ function renderStats(state) {
     wrap.appendChild(card);
   }
 
-  const statsValues = state.values;
-  if (statsValues.length > 0) {
-    const activity = statsValues.map((v) => ({
+  if (state.values.length > 0) {
+    const activity = state.values.map((v) => ({
       name: v.name,
-      count: valueActivityCount(state, v.id, date, 30),
-      hasHabit: valueHasActiveHabit(state, v.id),
+      percent: valueAttentionPercent(state, v.id, date, 30),
     }));
-    const max = Math.max(1, ...activity.filter((a) => a.hasHabit).map((a) => a.count));
     const rows = activity
       .map((a) =>
-        a.hasHabit
-          ? barRow(a.name, a.count, max, '--accent')
-          : `<div class="bar-row bar-row--empty"><span class="bar-label">${escapeHtml(a.name)}</span><span class="bar-empty-note">No active habit yet</span></div>`
+        a.percent === null
+          ? `<div class="bar-row bar-row--empty"><span class="bar-label">${escapeHtml(a.name)}</span><span class="bar-empty-note">No active habit yet</span></div>`
+          : percentBar(a.name, a.percent)
       )
       .join('');
     const card = el(`
       <div class="card">
         <h2>Where your attention went, last 30 days</h2>
-        <p class="muted small">Habit check-ins per value. Not a score — just a mirror on balance.</p>
+        <p class="muted small">Each value scored against its own habits' targets — 100% means you hit everything you set out to, regardless of how many habits other values have.</p>
         <div class="bar-list">${rows}</div>
       </div>
     `);
@@ -852,18 +975,35 @@ function renderStats(state) {
   return wrap;
 }
 
-function renderHistory(state) {
+function renderAchievements(state) {
   const wrap = el(`<div class="view"></div>`);
-  wrap.appendChild(el(`<h1>History</h1>`));
+  wrap.appendChild(el(`<h1>Achievements</h1>`));
   wrap.appendChild(el(`<p class="muted small">Achieved goals, and habits or to-dos you've marked complete — kept here instead of cluttering the active views.</p>`));
 
-  function historyRow(name, type, completedAt, onDelete) {
+  const totalGoalsAchieved = state.goals.filter((g) => g.status === 'achieved').length;
+  const totalHabitsCompleted = state.habits.filter((h) => h.status === 'completed').length;
+  const totalTodosCompleted = state.todos.filter((t) => t.status === 'done').length;
+
+  if (totalGoalsAchieved > 0 || totalHabitsCompleted > 0 || totalTodosCompleted > 0) {
+    wrap.appendChild(
+      el(`
+      <div class="stat-tiles">
+        <div class="stat-tile"><div class="stat-tile-value">${totalGoalsAchieved}</div><div class="stat-tile-label">Goals achieved</div></div>
+        <div class="stat-tile"><div class="stat-tile-value">${totalHabitsCompleted}</div><div class="stat-tile-label">Habits completed</div></div>
+        <div class="stat-tile"><div class="stat-tile-value">${totalTodosCompleted}</div><div class="stat-tile-label">To-dos completed</div></div>
+      </div>
+    `)
+    );
+  }
+
+  function historyRow(name, type, completedAt, goalTitle, onDelete) {
     const row = el(`
       <div class="habit-sub-row">
         <div class="habit-sub-main">
           <div class="habit-sub-info">
             <span class="habit-name">✓ ${escapeHtml(name)}</span>
             <span class="chip chip--neutral">${escapeHtml(type)}</span>
+            ${goalTitle ? `<span class="chip chip--neutral">→ ${escapeHtml(goalTitle)}</span>` : ''}
             ${completedAt ? `<span class="muted small">completed ${escapeHtml(completedAt)}</span>` : ''}
           </div>
           <button class="btn btn-tiny" data-action="delete">Delete</button>
@@ -877,64 +1017,65 @@ function renderHistory(state) {
   let anySection = false;
 
   state.values.forEach((v) => {
-    const goals = goalsForValue(state, v.id);
-    const relevantGoals = goals.filter(
-      (g) =>
-        g.status === 'achieved' ||
-        habitsForGoal(state, g.id).some((h) => h.status === 'completed') ||
-        todosForGoal(state, g.id).some((t) => t.status === 'done')
-    );
-    if (relevantGoals.length === 0) return;
+    const achievedGoals = goalsForValue(state, v.id).filter((g) => g.status === 'achieved');
+    const completedHabits = habitsForValue(state, v.id).filter((h) => h.status === 'completed');
+    const doneTodos = todosForValue(state, v.id).filter((t) => t.status === 'done');
+    const checkins = habitLogCountForValue(state, v.id);
+
+    if (achievedGoals.length === 0 && completedHabits.length === 0 && doneTodos.length === 0) return;
     anySection = true;
 
     const card = el(`
       <div class="card value-card">
         <h2>${escapeHtml(v.name)}</h2>
+        ${checkins > 0 ? `<p class="muted small">${checkins} total habit check-in${checkins === 1 ? '' : 's'}</p>` : ''}
         <div class="goal-list"></div>
+        <div class="habit-sublist"></div>
+        <div class="todo-sublist"></div>
       </div>
     `);
-    const goalList = card.querySelector('.goal-list');
 
-    relevantGoals.forEach((g) => {
-      const achieved = g.status === 'achieved';
-      const completedHabits = habitsForGoal(state, g.id).filter((h) => h.status === 'completed');
-      const doneTodos = todosForGoal(state, g.id).filter((t) => t.status === 'done');
+    const goalList = card.querySelector('.goal-list');
+    achievedGoals.forEach((g) => {
       const goalEl = el(`
-        <div class="goal-card">
+        <button type="button" class="goal-card goal-card--link">
           <div class="goal-header-row">
-            <div class="goal-title">${escapeHtml(g.title)} ${achieved ? '<span class="chip chip--achieved">✓ Achieved</span>' : ''}</div>
-            <button class="btn btn-tiny" data-action="edit-goal">Edit</button>
+            <div class="goal-title">${escapeHtml(g.title)} <span class="chip chip--achieved">✓ Achieved</span></div>
           </div>
-          <div class="habit-sublist"></div>
-        </div>
+        </button>
       `);
-      goalEl.querySelector('[data-action="edit-goal"]').onclick = () => openGoalModal(state, v.id, g);
-      const sub = goalEl.querySelector('.habit-sublist');
-      completedHabits.forEach((h) => {
-        sub.appendChild(
-          historyRow(h.name, 'habit', h.completedAt, () => {
-            openConfirmModal('Delete this habit permanently?', 'Delete', () => {
-              deleteHabit(state, h.id);
-              saveState(state);
-              showToast('Habit deleted permanently');
-              renderApp(state);
-            });
-          })
-        );
-      });
-      doneTodos.forEach((t) => {
-        sub.appendChild(
-          historyRow(t.title, 'to-do', t.completedAt, () => {
-            openConfirmModal('Delete this to-do permanently?', 'Delete', () => {
-              deleteTodo(state, t.id);
-              saveState(state);
-              showToast('To-do deleted permanently');
-              renderApp(state);
-            });
-          })
-        );
-      });
+      goalEl.onclick = () => goToGoal(state, g.id, v.id);
       goalList.appendChild(goalEl);
+    });
+
+    const habitSub = card.querySelector('.habit-sublist');
+    completedHabits.forEach((h) => {
+      const goal = h.goalId ? state.goals.find((g) => g.id === h.goalId) : null;
+      habitSub.appendChild(
+        historyRow(h.name, 'habit', h.completedAt, goal ? goal.title : null, () => {
+          openConfirmModal('Delete this habit permanently?', 'Delete', () => {
+            deleteHabit(state, h.id);
+            saveState(state);
+            showToast('Habit deleted permanently');
+            renderApp(state);
+          });
+        })
+      );
+    });
+
+    const todoSub = card.querySelector('.todo-sublist');
+    doneTodos.forEach((t) => {
+      const goal = t.goalId ? state.goals.find((g) => g.id === t.goalId) : null;
+      todoSub.appendChild(
+        historyRow(t.title, 'to-do', t.completedAt, goal ? goal.title : null, () => {
+          openConfirmModal('Delete this to-do permanently?', 'Delete', () => {
+            deleteTodo(state, t.id);
+            saveState(state);
+            showToast('To-do deleted permanently');
+            renderApp(state);
+          });
+        })
+      );
     });
 
     wrap.appendChild(card);
@@ -1008,6 +1149,7 @@ function renderSettings(state) {
         try {
           const imported = JSON.parse(reader.result);
           Object.assign(state, defaultState(), imported);
+          migrateToValueOwnedItems(state);
           saveState(state);
           renderApp(state);
         } catch (e) {
@@ -1108,15 +1250,12 @@ function openGoalModal(state, valueId, existingGoal) {
       <h2>${isEdit ? 'Edit goal' : 'New goal'}</h2>
       <label>Title</label>
       <input type="text" id="g-title" placeholder="e.g. Watch a Netflix show in Spanish without subtitles" value="${isEdit ? escapeHtml(existingGoal.title) : ''}" />
-      <label>Why does this matter to you?</label>
-      <textarea id="g-why" placeholder="Write a sentence or two">${isEdit ? escapeHtml(existingGoal.why || '') : ''}</textarea>
       <label>Target date</label>
       <input type="date" id="g-date" value="${isEdit ? escapeHtml(existingGoal.targetDate || '') : ''}" />
       <label>Notes <span class="muted small">(anything else worth keeping track of)</span></label>
       <textarea id="g-notes" placeholder="Optional">${isEdit ? escapeHtml(existingGoal.notes || '') : ''}</textarea>
       <div class="modal-actions modal-actions--split">
         <div class="modal-actions-left">
-          ${isEdit && existingGoal.status !== 'achieved' ? '<button class="btn btn-secondary" id="g-achieve">Mark as achieved</button>' : ''}
           ${isEdit ? '<button class="btn btn-danger" id="g-delete">Delete</button>' : ''}
         </div>
         <div class="modal-actions-right">
@@ -1131,17 +1270,16 @@ function openGoalModal(state, valueId, existingGoal) {
   content.querySelector('#g-save').onclick = () => {
     const title = content.querySelector('#g-title').value.trim();
     if (!title) return;
-    const why = content.querySelector('#g-why').value.trim();
     const targetDate = content.querySelector('#g-date').value;
     const notes = content.querySelector('#g-notes').value.trim();
     if (isEdit) {
-      Object.assign(existingGoal, { title, why, targetDate, notes });
+      Object.assign(existingGoal, { title, targetDate, notes });
     } else {
       state.goals.push({
         id: uid(),
         valueId,
         title,
-        why,
+        why: '',
         targetDate,
         notes,
         status: 'active',
@@ -1154,18 +1292,8 @@ function openGoalModal(state, valueId, existingGoal) {
   };
 
   if (isEdit) {
-    const achieveBtn = content.querySelector('#g-achieve');
-    if (achieveBtn) {
-      achieveBtn.onclick = () => {
-        existingGoal.status = 'achieved';
-        saveState(state);
-        closeModal();
-        showToast(`"${existingGoal.title}" achieved`);
-        renderApp(state);
-      };
-    }
     content.querySelector('#g-delete').onclick = () => {
-      openConfirmModal('Delete this goal? This cannot be undone — its habits will be deleted too.', 'Delete', () => {
+      openConfirmModal('Delete this goal? Its habits and to-dos stay under the value, just un-tagged.', 'Delete', () => {
         deleteGoal(state, existingGoal.id);
         saveState(state);
         showToast('Goal deleted');
@@ -1177,11 +1305,13 @@ function openGoalModal(state, valueId, existingGoal) {
   openModal(content);
 }
 
-function openHabitModal(state, goalId, existingHabit) {
+function openHabitModal(state, valueId, existingHabit) {
   const isEdit = !!existingHabit;
   const freqType = isEdit && existingHabit.frequency ? existingHabit.frequency.type : 'daily';
   const timesPerWeek = freqType === 'weekly' ? existingHabit.frequency.timesPerWeek : 2;
   const timesPerMonth = freqType === 'monthly' ? existingHabit.frequency.timesPerMonth : 2;
+  const valueGoals = goalsForValue(state, valueId).filter((g) => g.status !== 'achieved');
+  let selectedGoalId = isEdit ? existingHabit.goalId || null : null;
 
   const content = el(`
     <div class="modal-body">
@@ -1204,6 +1334,17 @@ function openHabitModal(state, goalId, existingHabit) {
         <label>How many times a month?</label>
         <input type="number" id="h-times-per-month" min="1" max="30" value="${timesPerMonth}" />
       </div>
+      ${
+        valueGoals.length > 0
+          ? `
+        <label class="small muted">Tag to a goal <span class="muted">(optional)</span></label>
+        <div class="filter-chips" id="h-goal-chips">
+          <button type="button" class="filter-chip ${!selectedGoalId ? 'active' : ''}" data-goal="">No tag</button>
+          ${valueGoals.map((g) => `<button type="button" class="filter-chip ${g.id === selectedGoalId ? 'active' : ''}" data-goal="${g.id}">${escapeHtml(g.title)}</button>`).join('')}
+        </div>
+      `
+          : ''
+      }
       <label>Notes <span class="muted small">(optional)</span></label>
       <textarea id="h-notes" placeholder="Optional">${isEdit ? escapeHtml(existingHabit.notes || '') : ''}</textarea>
       <div class="modal-actions modal-actions--split">
@@ -1222,6 +1363,16 @@ function openHabitModal(state, goalId, existingHabit) {
     content.querySelector('#h-weekly-count').style.display = e.target.value === 'weekly' ? '' : 'none';
     content.querySelector('#h-monthly-count').style.display = e.target.value === 'monthly' ? '' : 'none';
   });
+  const goalChips = content.querySelector('#h-goal-chips');
+  if (goalChips) {
+    goalChips.querySelectorAll('.filter-chip').forEach((btn) => {
+      btn.onclick = () => {
+        selectedGoalId = btn.dataset.goal || null;
+        goalChips.querySelectorAll('.filter-chip').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+      };
+    });
+  }
   content.querySelector('#h-cancel').onclick = closeModal;
   content.querySelector('#h-save').onclick = () => {
     const name = content.querySelector('#h-name').value.trim();
@@ -1236,11 +1387,12 @@ function openHabitModal(state, goalId, existingHabit) {
     }
     const notes = content.querySelector('#h-notes').value.trim();
     if (isEdit) {
-      Object.assign(existingHabit, { name, trigger, frequency, notes });
+      Object.assign(existingHabit, { name, trigger, frequency, notes, goalId: selectedGoalId });
     } else {
       state.habits.push({
         id: uid(),
-        goalId,
+        valueId,
+        goalId: selectedGoalId,
         name,
         trigger,
         frequency,
@@ -1277,25 +1429,50 @@ function openHabitModal(state, goalId, existingHabit) {
   openModal(content);
 }
 
-function openTodoModal(state, goalId) {
+function openTodoModal(state, valueId) {
+  const valueGoals = goalsForValue(state, valueId).filter((g) => g.status !== 'achieved');
+  let selectedGoalId = null;
+
   const content = el(`
     <div class="modal-body">
       <h2>New to-do</h2>
       <label>What needs doing?</label>
       <input type="text" id="t-title" placeholder="e.g. Sign up for the race" />
+      ${
+        valueGoals.length > 0
+          ? `
+        <label class="small muted">Tag to a goal <span class="muted">(optional)</span></label>
+        <div class="filter-chips" id="t-goal-chips">
+          <button type="button" class="filter-chip active" data-goal="">No tag</button>
+          ${valueGoals.map((g) => `<button type="button" class="filter-chip" data-goal="${g.id}">${escapeHtml(g.title)}</button>`).join('')}
+        </div>
+      `
+          : ''
+      }
       <div class="modal-actions">
         <button class="btn btn-secondary" id="t-cancel">Cancel</button>
         <button class="btn btn-primary" id="t-save">Save to-do</button>
       </div>
     </div>
   `);
+  const goalChips = content.querySelector('#t-goal-chips');
+  if (goalChips) {
+    goalChips.querySelectorAll('.filter-chip').forEach((btn) => {
+      btn.onclick = () => {
+        selectedGoalId = btn.dataset.goal || null;
+        goalChips.querySelectorAll('.filter-chip').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+      };
+    });
+  }
   content.querySelector('#t-cancel').onclick = closeModal;
   content.querySelector('#t-save').onclick = () => {
     const title = content.querySelector('#t-title').value.trim();
     if (!title) return;
     state.todos.push({
       id: uid(),
-      goalId,
+      valueId,
+      goalId: selectedGoalId,
       title,
       status: 'active',
       createdAt: todayISO(),
@@ -1402,11 +1579,11 @@ function openValueModal(state, value) {
     renderApp(state);
   };
   content.querySelector('#v-delete').onclick = () => {
-    openConfirmModal('Delete this value? This cannot be undone — its goals and habits will be deleted too.', 'Delete', () => {
+    openConfirmModal('Delete this value? This cannot be undone — its goals, habits, and to-dos will be deleted too.', 'Delete', () => {
       deleteValue(state, value.id);
       saveState(state);
       showToast('Value deleted');
-      renderApp(state);
+      goToValuesIndex(state);
     });
   };
   openModal(content);
