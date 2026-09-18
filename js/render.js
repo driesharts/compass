@@ -791,21 +791,36 @@ function renderJournal(state) {
     return true;
   };
 
+  const filtersExpanded = !!state._journalFiltersExpanded;
   const controls = el(`
     <div class="card journal-controls">
-      <input type="text" id="journal-search" placeholder="Search entries..." />
-      <p class="muted small journal-filter-heading">Prompts</p>
-      <div class="filter-chips">
-        <button type="button" class="filter-chip active" data-mode="all">All</button>
-        ${JOURNAL_PROMPT_CATEGORIES.map((c) => `<button type="button" class="filter-chip" data-mode="category" data-value="${c.id}">${escapeHtml(c.label)}</button>`).join('')}
-      </div>
-      <p class="muted small journal-filter-heading">Goals</p>
-      <div class="filter-chips">
-        <button type="button" class="filter-chip" data-mode="freeform">Freeform</button>
-        ${journalGoals.map((g) => `<button type="button" class="filter-chip" data-mode="goal" data-value="${g.id}">${goalChipLabel(g)}</button>`).join('')}
+      <button type="button" class="journal-filters-toggle" data-action="toggle-filters">
+        <span>Search &amp; filter</span>
+        <span class="journal-filters-caret">${filtersExpanded ? '▾' : '▸'}</span>
+      </button>
+      <div class="journal-filters-body" style="${filtersExpanded ? '' : 'display:none;'}">
+        <input type="text" id="journal-search" placeholder="Search entries..." />
+        <p class="muted small journal-filter-heading">Prompts</p>
+        <div class="filter-chips">
+          <button type="button" class="filter-chip active" data-mode="all">All</button>
+          ${JOURNAL_PROMPT_CATEGORIES.map((c) => `<button type="button" class="filter-chip" data-mode="category" data-value="${c.id}">${escapeHtml(c.label)}</button>`).join('')}
+        </div>
+        <p class="muted small journal-filter-heading">Goals</p>
+        <div class="filter-chips">
+          <button type="button" class="filter-chip" data-mode="freeform">Freeform</button>
+          ${journalGoals.map((g) => `<button type="button" class="filter-chip" data-mode="goal" data-value="${g.id}">${goalChipLabel(g)}</button>`).join('')}
+        </div>
       </div>
     </div>
   `);
+  const filtersBody = controls.querySelector('.journal-filters-body');
+  const filtersCaret = controls.querySelector('.journal-filters-caret');
+  controls.querySelector('[data-action="toggle-filters"]').onclick = () => {
+    state._journalFiltersExpanded = !state._journalFiltersExpanded;
+    saveState(state);
+    filtersBody.style.display = state._journalFiltersExpanded ? '' : 'none';
+    filtersCaret.textContent = state._journalFiltersExpanded ? '▾' : '▸';
+  };
   wrap.appendChild(controls);
 
   const listContainer = el(`<div class="journal-list"></div>`);
